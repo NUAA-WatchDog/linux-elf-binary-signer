@@ -1,6 +1,4 @@
-rm main prog1
-
 cc -o main main.c
-cc -o prog1 prog1.c -lelf
+cc -o elf-sign elf-sign.c -lelf -lcrypto
 
-./prog1 main
+./elf-sign main sha256 kernel_key.pem kernel_key.pem
