@@ -2,10 +2,17 @@
  * 
  * Copyright (c) 2020, Jingtang Zhang, Hua Zong.
  * 
- * Some code are from Linux kernel source.
+ * Some source code is from Linux kernel source (script/sign-file.c)
+ * 
+ * The origin copyright is as follows. We modified the file for developed
+ * for kernel module signature to our ELF signature function.
+ * 
+ * To compile this file, libssl and libelf should be installed. During
+ * compilation, add "cc ... -lelf -lcrypto" to use these libraries.
  * 
  * @author mrdrivingduck@gmail.com
  * @since 2020/04/20
+ * @version 2020/04/24
  * 
  * ***********************************************************************/
 
@@ -68,7 +75,7 @@
 #include <openssl/pkcs7.h>
 #endif
 
-struct module_signature {
+struct elf_signature {
 	uint8_t		algo;		/* Public-key crypto algorithm [0] */
 	uint8_t		hash;		/* Digest algorithm [0] */
 	uint8_t		id_type;	/* Key identifier type [PKEY_ID_PKCS7] */
@@ -79,8 +86,6 @@ struct module_signature {
 };
 
 #define PKEY_ID_PKCS7 2
-
-static char magic_number[] = "~Module signature appended~\n";
 
 static __attribute__((noreturn))
 void format(void)
@@ -222,11 +227,24 @@ static X509 *read_x509(const char *x509_name)
 	return x509;
 }
 
+/**
+ * To sign the buffer and write the signature to the destination file.
+ * 
+ * @param segment_buf The buffer address to be signed.
+ * @param segment_len The length of the buffer.
+ * @param hash_algo The name of the hash algorithm for digest.
+ * @param private_key_name The private-key file.
+ * @param x509_name The X.509 file.
+ * @param dest_name The destination file for storing signature.
+ * 
+ * @author Mr Dk.
+ * @since 2020/04/24
+ */
 static void sign_segment(void *segment_buf, size_t segment_len,
 							char *hash_algo, char *private_key_name,
-							char *x509_name) {
-	struct module_signature sig_info = { .id_type = PKEY_ID_PKCS7 };
-	unsigned long module_size, sig_size;
+							char *x509_name, char *dest_name) {
+	struct elf_signature sig_info = { .id_type = PKEY_ID_PKCS7 };
+	unsigned long sig_size;
 	unsigned int use_signed_attrs;
 	const EVP_MD *digest_algo;
 	EVP_PKEY *private_key;
@@ -283,102 +301,144 @@ static void sign_segment(void *segment_buf, size_t segment_len,
 				PKCS7_DETACHED | use_signed_attrs);
 	ERR(!pkcs7, "PKCS7_sign");
 #endif
-
-	char dest_name[] = "sig.out";
 	bd = BIO_new_file(dest_name, "wb");
+	// bd = BIO_new(BIO_s_mem());
 	ERR(!bd, "%s", dest_name);
 #ifndef USE_PKCS7
 	ERR(i2d_CMS_bio_stream(bd, cms, NULL, 0) < 0, "%s", "Fail to sign.");
 #else
 	ERR(i2d_PKCS7_bio(bd, pkcs7) < 0, "%s", "Fail to sign.");
 #endif
-	sig_size = BIO_number_written(bd) - module_size;
+	sig_size = BIO_number_written(bd);
 	sig_info.sig_len = htonl(sig_size);
-	ERR(BIO_write(bd, &sig_info, sizeof(sig_info)) < 0, "%s", dest_name);
+	ERR(BIO_write(bd, &sig_info, sizeof(sig_info)) < 0, "%s", "Fail to write signature info.");
 
-	ERR(BIO_free(bd) < 0, "%s", dest_name);
+	// BUF_MEM *bptr;
+	// BIO_get_mem_ptr(bd, &bptr);
+	// BIO_set_close(bd, BIO_NOCLOSE);
+
+	ERR(BIO_free(bd) < 0, "%s", "Fail to free signature buffer");
 }
 
+/**
+ * 
+ * The program entry point.
+ * 
+ * @argv[1] - The ELF file to be signed.
+ * @argv[2] - The hash algorithm for making digest.
+ * @argv[3] - The file containing private key.
+ * @argv[4] - The file containing X.509.
+ * @argv[5] - The destination file for storing signature.
+ * 
+ * @author Mr Dk.
+ * @since 2020/04/20
+ * @version 2020/04/24
+ * 
+ */
 int main(int argc , char **argv) {
 	int fd;
-	Elf *e;
 	int version;
+	Elf *elf;
 
 	Elf_Kind ek;
 	GElf_Ehdr eher;
 	GElf_Shdr shdr;
-	unsigned char *name, *p, pc[4 * sizeof(char)];
+	unsigned char *name, *p;
 
-	char buf[4096];
+	char buf[1024*1024*7];
 	
-	size_t n, shstrndx, sz;
+	size_t n, shstrndx;
 
-	// if (argc != 2)
-	// 	errx(EXIT_FAILURE , "usage: %s file -name", argv[0]);
-
-	if (elf_version(EV_CURRENT) == EV_NONE)
+	if (elf_version(EV_CURRENT) == EV_NONE) {
 		errx(EXIT_FAILURE , "ELF library initialization " "failed: %s", elf_errmsg(-1));
+	}
 
-	if ((fd = open(argv[1], O_RDONLY , 0)) < 0)
+	if ((fd = open(argv[1], O_RDONLY , 0)) < 0) {
 		err(EXIT_FAILURE , "open \%s\" failed", argv[1]);
+	}
 
-	if ((e = elf_begin(fd, ELF_C_READ, NULL)) == NULL)
+	if ((elf = elf_begin(fd, ELF_C_READ, NULL)) == NULL) {
 		errx(EXIT_FAILURE , "elf_begin() failed: %s.", elf_errmsg(-1));
+	}
 
-	if (elf_kind(e) != ELF_K_ELF) {
+	if (elf_kind(elf) != ELF_K_ELF) {
 		errx(EXIT_FAILURE, "\"%s\" is not an ELF object.", argv[1]);
 	}
 
-	if ((version = gelf_getclass(e)) == ELFCLASSNONE) {
+	if ((version = gelf_getclass(elf)) == ELFCLASSNONE) {
 		errx(EXIT_FAILURE , "getclass() failed: %s.", elf_errmsg(-1));
 	}
 
 	(void) printf("%s: %d-bit ELF object\n", argv[1], version == ELFCLASS32 ? 32 : 64);
 
-	// if (elf_getshdrnum(e, &n) != 0)
-	// 	errx(EXIT_FAILURE , "getshdrnum() failed: %s.", elf_errmsg(-1));
-	// printf("%ld sections\n", n);
+	if (elf_getshdrnum(elf, &n) != 0)
+		errx(EXIT_FAILURE , "getshdrnum() failed: %s.", elf_errmsg(-1));
+	printf("%ld sections\n", n);
 
-	if (elf_getshdrstrndx(e, &shstrndx) != 0)
+	if (elf_getshdrstrndx(elf, &shstrndx) != 0)
 		errx(EXIT_FAILURE , "elf_getshdrstrndx() failed: %s.", elf_errmsg(-1));
 	// printf("%ld section index\n", shstrndx);
 
 	char *hash_algo = argv[2];
 	char *private_key_name = argv[3];
 	char *x509_name = argv[4];
+	char *dest_name = argv[5];
 
 	Elf_Data *data;
 	Elf_Scn *scn = NULL;
 	
-	while ((scn = elf_nextscn(e, scn)) != NULL) {
+	/**
+	 * Iterate over sections.
+	 */
+	while ((scn = elf_nextscn(elf, scn)) != NULL) {
+		/**
+		 * Get section header from section header table.
+		 * Get section name from section header name table.
+		 */
 		if (gelf_getshdr(scn, &shdr) != &shdr)
 			errx(EXIT_FAILURE , "getshdr() failed: %s.", elf_errmsg(-1));
-		if ((name = elf_strptr(e, shstrndx, shdr.sh_name)) == NULL)
+		if ((name = elf_strptr(elf, shstrndx, shdr.sh_name)) == NULL)
 			errx(EXIT_FAILURE , "elf_strptr() failed: %s.", elf_errmsg(-1));
 		(void) printf("Section %-4.4jd %s\n", (uintmax_t) elf_ndxscn(scn), name);
 
+		/**
+		 * Code segment.
+		 */
 		if (0 == strcmp(name, ".text")) {
 			n = 0;
 			printf("Code segment length: %ld\n", shdr.sh_size);
 
-			int count = 0;
-
-			while (n < shdr.sh_size && (data = elf_getdata(scn, data)) != NULL) {
-				p = (unsigned char *) data->d_buf;
-				while (p < (unsigned char *) data->d_buf + data->d_size) {
-					// printf("%02x", *p);
-					buf[count] = *p;
-					count++;
-					n++;
-					p++;
-					// (void) putchar((n % 16) ? ' ' : '\n');
-				}
+			if ((data = elf_getdata(scn, data)) != NULL) {
+				printf("Buffer size: %ld\n", data->d_size);
+				sign_segment(data->d_buf, data->d_size, hash_algo, private_key_name, x509_name, dest_name);
 			}
-			sign_segment(buf, count, hash_algo, private_key_name, x509_name);
+
+			// int count = 0;
+			// printf("Buffer size: %ld\n", data->d_size);
+			// while (n < shdr.sh_size && (data = elf_getdata(scn, data)) != NULL) {
+			// 	p = (unsigned char *) data->d_buf;
+			// 	printf("Buffer size: %ld\n", data->d_size);
+			// 	while (p < (unsigned char *) data->d_buf + data->d_size) {
+			// 		// printf("%02x", *p);
+			// 		buf[count] = *p;
+			// 		count++;
+			// 		n++;
+			// 		p++;
+			// 		// (void) putchar((n % 16) ? ' ' : '\n');
+			// 		if (count > sizeof(buf)) {
+			// 			break;
+			// 		}
+			// 	}
+			// 	if (count > sizeof(buf)) {
+			// 		break;
+			// 	}
+			// }
+
+			// sign_segment(buf, count, hash_algo, private_key_name, x509_name, dest_name);
 		}
 	}
 
-	(void) elf_end(e);
+	(void) elf_end(elf);
 	(void) close(fd);
 	exit(EXIT_SUCCESS);
 }

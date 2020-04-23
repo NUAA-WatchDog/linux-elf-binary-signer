@@ -55,4 +55,6 @@ dkms.conf
 main
 elf-sign
 sign
+vmlinux
+parse
 .txt
