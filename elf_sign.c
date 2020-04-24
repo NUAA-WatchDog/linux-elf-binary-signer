@@ -318,6 +318,8 @@ static void sign_segment(void *segment_buf, size_t segment_len,
 	// BIO_set_close(bd, BIO_NOCLOSE);
 
 	ERR(BIO_free(bd) < 0, "%s", "Fail to free signature buffer");
+
+	(void) printf("Written to: %s\n", dest_name);
 }
 
 /**
@@ -336,27 +338,17 @@ static void sign_segment(void *segment_buf, size_t segment_len,
  * 
  */
 int main(int argc , char **argv) {
-	int fd;
-	int version;
-	Elf *elf;
-
-	Elf_Kind ek;
-	GElf_Ehdr eher;
-	GElf_Shdr shdr;
-	unsigned char *name, *p;
-
-	char buf[1024*1024*7];
-	
-	size_t n, shstrndx;
 
 	if (elf_version(EV_CURRENT) == EV_NONE) {
 		errx(EXIT_FAILURE , "ELF library initialization " "failed: %s", elf_errmsg(-1));
 	}
 
+	int fd;
 	if ((fd = open(argv[1], O_RDONLY , 0)) < 0) {
-		err(EXIT_FAILURE , "open \%s\" failed", argv[1]);
+		err(EXIT_FAILURE , "open \"%s\" failed", argv[1]);
 	}
 
+	Elf *elf;
 	if ((elf = elf_begin(fd, ELF_C_READ, NULL)) == NULL) {
 		errx(EXIT_FAILURE , "elf_begin() failed: %s.", elf_errmsg(-1));
 	}
@@ -365,27 +357,33 @@ int main(int argc , char **argv) {
 		errx(EXIT_FAILURE, "\"%s\" is not an ELF object.", argv[1]);
 	}
 
+	int version;
 	if ((version = gelf_getclass(elf)) == ELFCLASSNONE) {
-		errx(EXIT_FAILURE , "getclass() failed: %s.", elf_errmsg(-1));
+		errx(EXIT_FAILURE, "getclass() failed: %s.", elf_errmsg(-1));
 	}
-
 	(void) printf("%s: %d-bit ELF object\n", argv[1], version == ELFCLASS32 ? 32 : 64);
 
-	if (elf_getshdrnum(elf, &n) != 0)
-		errx(EXIT_FAILURE , "getshdrnum() failed: %s.", elf_errmsg(-1));
-	printf("%ld sections\n", n);
+	size_t sh_count = 0;
+	if (elf_getshdrnum(elf, &sh_count) != 0) {
+		errx(EXIT_FAILURE, "getshdrnum() failed: %s.", elf_errmsg(-1));
+	}
+	(void) printf("%ld sections detected.\n", sh_count);
 
-	if (elf_getshdrstrndx(elf, &shstrndx) != 0)
-		errx(EXIT_FAILURE , "elf_getshdrstrndx() failed: %s.", elf_errmsg(-1));
-	// printf("%ld section index\n", shstrndx);
+	size_t shstrndx = 0;
+	if (elf_getshdrstrndx(elf, &shstrndx) != 0) {
+		errx(EXIT_FAILURE, "elf_getshdrstrndx() failed: %s.", elf_errmsg(-1));
+	}
+	// (void) printf("%ld section index\n", shstrndx);
 
 	char *hash_algo = argv[2];
 	char *private_key_name = argv[3];
 	char *x509_name = argv[4];
 	char *dest_name = argv[5];
 
-	Elf_Data *data;
+	Elf_Data *data = NULL;
 	Elf_Scn *scn = NULL;
+	GElf_Shdr shdr;
+	unsigned char *name, *p;
 	
 	/**
 	 * Iterate over sections.
@@ -395,28 +393,33 @@ int main(int argc , char **argv) {
 		 * Get section header from section header table.
 		 * Get section name from section header name table.
 		 */
-		if (gelf_getshdr(scn, &shdr) != &shdr)
+		if (gelf_getshdr(scn, &shdr) != &shdr) {
 			errx(EXIT_FAILURE , "getshdr() failed: %s.", elf_errmsg(-1));
-		if ((name = elf_strptr(elf, shstrndx, shdr.sh_name)) == NULL)
+		}
+		if ((name = elf_strptr(elf, shstrndx, shdr.sh_name)) == NULL) {
 			errx(EXIT_FAILURE , "elf_strptr() failed: %s.", elf_errmsg(-1));
-		(void) printf("Section %-4.4jd %s\n", (uintmax_t) elf_ndxscn(scn), name);
+		}
 
 		/**
 		 * Code segment.
 		 */
 		if (0 == strcmp(name, ".text")) {
-			n = 0;
-			printf("Code segment length: %ld\n", shdr.sh_size);
+			(void) printf("Section %-4.4jd %s\n", (uintmax_t) elf_ndxscn(scn), name);
+			(void) printf("Code segment length: %ld\n", shdr.sh_size);
 
-			if ((data = elf_getdata(scn, data)) != NULL) {
-				printf("Buffer size: %ld\n", data->d_size);
-				sign_segment(data->d_buf, data->d_size, hash_algo, private_key_name, x509_name, dest_name);
+			if ((data = elf_getdata(scn, data)) == NULL) {
+				errx(EXIT_FAILURE , "elf_getdata() failed: %s.", elf_errmsg(-1));
 			}
+			
+			printf("Buffer size: %ld\n", data->d_size);
+			sign_segment(data->d_buf, data->d_size, hash_algo, private_key_name, x509_name, dest_name);
 
+			// n = 0;
 			// int count = 0;
 			// printf("Buffer size: %ld\n", data->d_size);
 			// while (n < shdr.sh_size && (data = elf_getdata(scn, data)) != NULL) {
 			// 	p = (unsigned char *) data->d_buf;
+			// char buf[1024*1024*7];
 			// 	printf("Buffer size: %ld\n", data->d_size);
 			// 	while (p < (unsigned char *) data->d_buf + data->d_size) {
 			// 		// printf("%02x", *p);

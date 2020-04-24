@@ -52,9 +52,7 @@ Mkfile.old
 dkms.conf
 
 .vscode/
-main
+sign-target*
 elf-sign
-sign
-vmlinux
 parse
-.txt
+vmlinux

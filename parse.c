@@ -13,9 +13,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-int main() {
+/**
+ * @argv[1] - The file to be HEX dumped. 
+ */
+int main(int argc , char **argv) {
 
-	int fd = open("text.data", O_RDONLY);
+	int fd = open(argv[1], O_RDONLY);
 	unsigned char buf;
 	while (read(fd, &buf, sizeof(unsigned char)) > 0) {
 		printf("0x%02x,", buf);
