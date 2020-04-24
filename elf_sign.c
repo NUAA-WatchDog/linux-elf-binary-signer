@@ -12,7 +12,7 @@
  * 
  * @author mrdrivingduck@gmail.com
  * @since 2020/04/20
- * @version 2020/04/24
+ * @version 2020/04/25
  * 
  * ***********************************************************************/
 
@@ -241,8 +241,9 @@ static X509 *read_x509(const char *x509_name)
  * @since 2020/04/24
  */
 static void sign_segment(void *segment_buf, size_t segment_len,
-							char *hash_algo, char *private_key_name,
-							char *x509_name, char *dest_name) {
+	char *hash_algo, char *private_key_name,
+	char *x509_name, char *dest_name) {
+
 	struct elf_signature sig_info = { .id_type = PKEY_ID_PKCS7 };
 	unsigned long sig_size;
 	unsigned int use_signed_attrs;
@@ -311,7 +312,8 @@ static void sign_segment(void *segment_buf, size_t segment_len,
 #endif
 	sig_size = BIO_number_written(bd);
 	sig_info.sig_len = htonl(sig_size);
-	ERR(BIO_write(bd, &sig_info, sizeof(sig_info)) < 0, "%s", "Fail to write signature info.");
+	ERR(BIO_write(bd, &sig_info, sizeof(sig_info)) < 0, "%s",
+		"Fail to write signature info.");
 
 	// BUF_MEM *bptr;
 	// BIO_get_mem_ptr(bd, &bptr);
@@ -334,23 +336,23 @@ static void sign_segment(void *segment_buf, size_t segment_len,
  * 
  * @author Mr Dk.
  * @since 2020/04/20
- * @version 2020/04/24
+ * @version 2020/04/25
  * 
  */
-int main(int argc , char **argv) {
+int main(int argc, char **argv) {
 
 	if (elf_version(EV_CURRENT) == EV_NONE) {
-		errx(EXIT_FAILURE , "ELF library initialization " "failed: %s", elf_errmsg(-1));
+		errx(EXIT_FAILURE, "ELF library initialization " "failed: %s", elf_errmsg(-1));
 	}
 
 	int fd;
 	if ((fd = open(argv[1], O_RDONLY , 0)) < 0) {
-		err(EXIT_FAILURE , "open \"%s\" failed", argv[1]);
+		err(EXIT_FAILURE, "open \"%s\" failed", argv[1]);
 	}
 
 	Elf *elf;
 	if ((elf = elf_begin(fd, ELF_C_READ, NULL)) == NULL) {
-		errx(EXIT_FAILURE , "elf_begin() failed: %s.", elf_errmsg(-1));
+		errx(EXIT_FAILURE, "elf_begin() failed: %s.", elf_errmsg(-1));
 	}
 
 	if (elf_kind(elf) != ELF_K_ELF) {
@@ -394,25 +396,27 @@ int main(int argc , char **argv) {
 		 * Get section name from section header name table.
 		 */
 		if (gelf_getshdr(scn, &shdr) != &shdr) {
-			errx(EXIT_FAILURE , "getshdr() failed: %s.", elf_errmsg(-1));
+			errx(EXIT_FAILURE, "getshdr() failed: %s.", elf_errmsg(-1));
 		}
 		if ((name = elf_strptr(elf, shstrndx, shdr.sh_name)) == NULL) {
-			errx(EXIT_FAILURE , "elf_strptr() failed: %s.", elf_errmsg(-1));
+			errx(EXIT_FAILURE, "elf_strptr() failed: %s.", elf_errmsg(-1));
 		}
 
 		/**
 		 * Code segment.
 		 */
 		if (0 == strcmp(name, ".text")) {
-			(void) printf("Section %-4.4jd %s\n", (uintmax_t) elf_ndxscn(scn), name);
+			(void) printf("Section %-4.4jd %s\n",
+				(uintmax_t) elf_ndxscn(scn), name);
 			(void) printf("Code segment length: %ld\n", shdr.sh_size);
 
 			if ((data = elf_getdata(scn, data)) == NULL) {
-				errx(EXIT_FAILURE , "elf_getdata() failed: %s.", elf_errmsg(-1));
+				errx(EXIT_FAILURE, "elf_getdata() failed: %s.", elf_errmsg(-1));
 			}
 			
 			printf("Buffer size: %ld\n", data->d_size);
-			sign_segment(data->d_buf, data->d_size, hash_algo, private_key_name, x509_name, dest_name);
+			sign_segment(data->d_buf, data->d_size,
+				hash_algo, private_key_name, x509_name, dest_name);
 
 			// n = 0;
 			// int count = 0;
