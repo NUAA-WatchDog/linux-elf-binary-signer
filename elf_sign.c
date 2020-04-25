@@ -1,6 +1,6 @@
 /**************************************************************************
  * 
- * Copyright (c) 2020, Jingtang Zhang, Hua Zong.
+ * Copyright © 2020, Jingtang Zhang, Hua Zong.
  * 
  * Some source code is from Linux kernel source (script/sign-file.c)
  * 
@@ -336,9 +336,9 @@ static void sign_segment(void *segment_buf, size_t segment_len,
  * The signature has already on the file system, e.g., .text_sig.
  * 
  * e.g. objcopy \
- * 			--add-section .text_sig=.text_sig \
- * 			--set-section-flags .text_sig=readonly \
- * 			<elf-file>
+ *          --add-section .text_sig=.text_sig \
+ *          --set-section-flags .text_sig=readonly \
+ *          <elf-file>
  * 
  * @param file_name The ELF file that will be appended a section.
  * @param section_name The name of the section being signed.
@@ -386,6 +386,31 @@ static void add_signature_section(char *file_name, char *section_name) {
 }
 
 /**
+ * Make a copy of unsigned ELF file for back-up.
+ * 
+ * @param elf_file_name The ELF file name to be copied.
+ */
+static void elf_back_up(char *elf_file_name) {
+
+	char backup_file_name[256];
+	strcpy(backup_file_name, elf_file_name);
+	strcat(backup_file_name, ".old");
+
+	char *argv[] = {
+		"cp",
+		elf_file_name, backup_file_name,
+		NULL
+	};
+
+	int pid = fork();
+	if (pid == 0) {
+		ERR(execvp("cp", argv) < 0, "%s", "Failed to use cp.");
+		exit(0);
+	}
+	waitpid(pid, NULL, 0);
+}
+
+/**
  * 
  * The program entry point.
  * 
@@ -406,13 +431,13 @@ int main(int argc, char **argv) {
 		errx(EXIT_FAILURE, "ELF library initialization " "failed: %s", elf_errmsg(-1));
 	}
 
-	int fd;
-	if ((fd = open(argv[1], O_RDONLY , 0)) < 0) {
+	int fd = -1;
+	if ((fd = open(argv[1], O_RDWR, 0)) < 0) {
 		err(EXIT_FAILURE, "open \"%s\" failed", argv[1]);
 	}
 
-	Elf *elf;
-	if ((elf = elf_begin(fd, ELF_C_READ, NULL)) == NULL) {
+	Elf *elf = NULL;
+	if ((elf = elf_begin(fd, ELF_C_RDWR, NULL)) == NULL) {
 		errx(EXIT_FAILURE, "elf_begin() failed: %s.", elf_errmsg(-1));
 	}
 
@@ -420,7 +445,7 @@ int main(int argc, char **argv) {
 		errx(EXIT_FAILURE, "\"%s\" is not an ELF object.", argv[1]);
 	}
 
-	int version;
+	int version = 0;
 	if ((version = gelf_getclass(elf)) == ELFCLASSNONE) {
 		errx(EXIT_FAILURE, "getclass() failed: %s.", elf_errmsg(-1));
 	}
@@ -446,7 +471,7 @@ int main(int argc, char **argv) {
 	Elf_Data *data = NULL;
 	Elf_Scn *scn = NULL;
 	GElf_Shdr shdr;
-	unsigned char *name, *p;
+	unsigned char *section_name, *p;
 	
 	/**
 	 * Iterate over sections.
@@ -459,16 +484,16 @@ int main(int argc, char **argv) {
 		if (gelf_getshdr(scn, &shdr) != &shdr) {
 			errx(EXIT_FAILURE, "getshdr() failed: %s.", elf_errmsg(-1));
 		}
-		if ((name = elf_strptr(elf, shstrndx, shdr.sh_name)) == NULL) {
+		if ((section_name = elf_strptr(elf, shstrndx, shdr.sh_name)) == NULL) {
 			errx(EXIT_FAILURE, "elf_strptr() failed: %s.", elf_errmsg(-1));
 		}
 
 		/**
 		 * Code segment.
 		 */
-		if (0 == strcmp(name, ".text")) {
+		if (0 == strcmp(section_name, ".text")) {
 			(void) printf("Section %-4.4jd %s\n",
-				(uintmax_t) elf_ndxscn(scn), name);
+				(uintmax_t) elf_ndxscn(scn), section_name);
 			(void) printf("Code segment length: %ld\n", shdr.sh_size);
 
 			if ((data = elf_getdata(scn, data)) == NULL) {
@@ -477,7 +502,7 @@ int main(int argc, char **argv) {
 			
 			printf("Buffer size: %ld\n", data->d_size);
 			sign_segment(data->d_buf, data->d_size,
-				hash_algo, private_key_name, x509_name, name);
+				hash_algo, private_key_name, x509_name, section_name);
 
 			// n = 0;
 			// int count = 0;
@@ -509,7 +534,14 @@ int main(int argc, char **argv) {
 	(void) elf_end(elf);
 	(void) close(fd);
 
-	// Add signature should
+	/**
+	 * Make a copy of unsigned file.
+	 */
+	elf_back_up(argv[1]);
+
+	/**
+	 * Add signature section into target ELF.
+	 */
 	add_signature_section(argv[1], ".text");
 
 	exit(EXIT_SUCCESS);

@@ -17,5 +17,4 @@ all: $(SRC)
 clean: 
 	$(RM) $(EXEC)
 	$(RM) $(SIGN_TARGETT).*
-	$(RM) *.out
-	$(RM) *.sig
+	$(RM) .*_sig
