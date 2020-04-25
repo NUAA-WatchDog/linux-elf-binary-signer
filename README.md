@@ -19,7 +19,7 @@ For a [Linux kernel with signature verification function](https://github.com/mrd
 Firstly, install the dependencies:
 
 ```bash
-$ sudo apt install libssl-dev libelf-dev binutils
+$ sudo apt install libssl-dev libelf-dev binutils openssl
 ```
 
 Then, compile and test the tool by:
@@ -32,19 +32,20 @@ cc -o parse parse.c
 ```
 
 ```bash
-$ ./sign.sh sign-target .code_sig
-@@ Signing for: sign-target
-@@ Making a copy of sign-target: sign-target.sig
-@@ Adding section for: sign-target.sig
-@@ Signature added to sign-target.sig
+$ ./elf-sign sign-target sha256 certs/kernel_key.pem certs/kernel_key.pem
+sign-target: 64-bit ELF object
+29 sections detected.
+Section 0014 .text
+Code segment length: 418
+Buffer size: 418
+Writing signature to: .text_sig
+Removing .text_sig
 ```
-
-The script will make a new copy `sign-target.sig` and append a new section called `.code_sig` with signature.
 
 To check the result, use `readelf` or `objdump`:
 
 ```bash
-$ readelf -a sign-target.sig
+$ readelf -a sign-target
 ...
 Section Headers:
   [Nr] Name              Type             Address           Offset
@@ -56,7 +57,7 @@ Section Headers:
 ```
 
 ```bash
-$ objdump -s sign-target.sig
+$ objdump -s sign-target
 ...
 Contents of section .code_sig:
  0000 308201cd 06092a86 4886f70d 010702a0  0.....*.H.......
@@ -73,44 +74,6 @@ Contents of section .code_sig:
 ```
 
 It means the tools work fine.
-
-## Usage
-
-We recommend using the `sign.sh` directly, like the example above. The usage is as follows:
-
-```bash
-$ ./sign.sh <target-elf> <sig_section_name>
-```
-
-But you can still use the tools seperately.
-
-Use `elf-sign` in the follwing way, the signature will be written into a file:
-
-```bash
-$ ./elf-sign <target-elf> <hash_algo> <private_key> <x509> <dest_file>
-```
-
-For example:
-
-```bash
-$ ./elf-sign sign-target sha256 \
-    certs/kernel_key.pem certs/kernel_key.pem \
-    sig.out
-sign-target: 64-bit ELF object
-29 sections detected.
-Section 0014 .text
-Code segment length: 418
-Buffer size: 418
-Writing signature to: sig.out
-```
-
-Then, use `objcopy` command to inject the signature as a section into ELF binary:
-
-```bash
-$ objcopy --add-section <section_name>=sig.out \
-    --set-section-flags <section_name>=readonly \
-    <target-elf>
-```
 
 ## Generate Private Key
 
@@ -136,7 +99,7 @@ subjectKeyIdentifier=hash
 authorityKeyIdentifier=keyid
 ```
 
-Then, generate the key through `openssl` command: (`openssl` should be installed)
+Then, generate the key through `openssl` command:
 
 ```bash
 $ cd certs
@@ -152,6 +115,10 @@ $ cd ..
 ```
 
 This is the file for signing a signature. Also, the file should be compiled with kernel to become a built-in key for signature verification.
+
+## License
+
+Copyright © Jingtang Zhang, 2020. ([MIT License](LICENSE))
 
 ---
 

@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <libelf.h>
 #include <gelf.h>
+#include <sys/wait.h>
 
 /* Sign a module file using the given key.
  *
@@ -235,14 +236,15 @@ static X509 *read_x509(const char *x509_name)
  * @param hash_algo The name of the hash algorithm for digest.
  * @param private_key_name The private-key file.
  * @param x509_name The X.509 file.
- * @param dest_name The destination file for storing signature.
+ * @param section_name The name of the section to be signed.
  * 
  * @author Mr Dk.
  * @since 2020/04/24
+ * @version 2020/04/25
  */
 static void sign_segment(void *segment_buf, size_t segment_len,
-	char *hash_algo, char *private_key_name,
-	char *x509_name, char *dest_name) {
+	char *hash_algo, char *private_key_name, char *x509_name,
+	char *section_name) {
 
 	struct elf_signature sig_info = { .id_type = PKEY_ID_PKCS7 };
 	unsigned long sig_size;
@@ -302,9 +304,14 @@ static void sign_segment(void *segment_buf, size_t segment_len,
 				PKCS7_DETACHED | use_signed_attrs);
 	ERR(!pkcs7, "PKCS7_sign");
 #endif
-	bd = BIO_new_file(dest_name, "wb");
+
+	char new_sec_name[32];
+	strcpy(new_sec_name, section_name);
+	strcat(new_sec_name, "_sig");
+
+	bd = BIO_new_file(new_sec_name, "wb");
 	// bd = BIO_new(BIO_s_mem());
-	ERR(!bd, "%s", dest_name);
+	ERR(!bd, "%s", new_sec_name);
 #ifndef USE_PKCS7
 	ERR(i2d_CMS_bio_stream(bd, cms, NULL, 0) < 0, "%s", "Fail to sign.");
 #else
@@ -321,7 +328,61 @@ static void sign_segment(void *segment_buf, size_t segment_len,
 
 	ERR(BIO_free(bd) < 0, "%s", "Fail to free signature buffer");
 
-	(void) printf("Writing signature to: %s\n", dest_name);
+	(void) printf("Writing signature to: %s\n", new_sec_name);
+}
+
+/**
+ * Add a specific section to the specific ELF file.
+ * The signature has already on the file system, e.g., .text_sig.
+ * 
+ * e.g. objcopy \
+ * 			--add-section .text_sig=.text_sig \
+ * 			--set-section-flags .text_sig=readonly \
+ * 			<elf-file>
+ * 
+ * @param file_name The ELF file that will be appended a section.
+ * @param section_name The name of the section being signed.
+ */
+static void add_signature_section(char *file_name, char *section_name) {
+
+	char sig_file_name[32];
+	strcpy(sig_file_name, section_name);
+	strcat(sig_file_name, "_sig");
+
+	char new_section_name[64];
+	strcpy(new_section_name, sig_file_name);
+	strcat(new_section_name, "=");
+	strcat(new_section_name, sig_file_name);
+
+	char section_flags[64];
+	strcpy(section_flags, sig_file_name);
+	strcat(section_flags, "=readonly");
+
+	/**
+	 * Prepare for the arguments.
+	 */
+	char *argv[] = {
+		"objcopy",
+		"--add-section", new_section_name,
+		"--set-section-flags", section_flags,
+		file_name, NULL
+	};
+
+	/**
+	 * Fork a new process to invoke objcopy.
+	 */
+	int pid = fork();
+	if (pid == 0) {
+		ERR(execvp("objcopy", argv) < 0, "%s", "Failed to use objcopy.");
+		exit(0);
+	}
+	waitpid(pid, NULL, 0);
+
+	/**
+	 * Remove the signature file.
+	 */
+	remove(sig_file_name);
+	(void) printf("Removing %s\n", sig_file_name);
 }
 
 /**
@@ -416,7 +477,7 @@ int main(int argc, char **argv) {
 			
 			printf("Buffer size: %ld\n", data->d_size);
 			sign_segment(data->d_buf, data->d_size,
-				hash_algo, private_key_name, x509_name, dest_name);
+				hash_algo, private_key_name, x509_name, name);
 
 			// n = 0;
 			// int count = 0;
@@ -447,5 +508,9 @@ int main(int argc, char **argv) {
 
 	(void) elf_end(elf);
 	(void) close(fd);
+
+	// Add signature should
+	add_signature_section(argv[1], ".text");
+
 	exit(EXIT_SUCCESS);
 }
