@@ -321,7 +321,7 @@ static void sign_segment(void *segment_buf, size_t segment_len,
 
 	ERR(BIO_free(bd) < 0, "%s", "Fail to free signature buffer");
 
-	(void) printf("Written to: %s\n", dest_name);
+	(void) printf("Writing signature to: %s\n", dest_name);
 }
 
 /**
