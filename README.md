@@ -1,6 +1,6 @@
 # linux-elf-binary-signer
 
-🐧 Add digital signature into an ELF binary.
+🐧 Adding digital signature into an ELF binary.
 
 Created by : Mr Dk.
 
@@ -29,7 +29,17 @@ $ make
 cc -o elf-sign elf_sign.c -lcrypto -lelf
 cc -o sign-target sign_target.c
 cc -o parse parse.c
+elf-sign elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem
+elf-sign: 64-bit ELF object
+29 sections detected.
+Section 0014 .text
+Code segment length: 5186
+Buffer size: 5186
+Writing signature to: .text_sig
+Removing .text_sig
 ```
+
+The `elf-sign` ELF binary will be signed by itself, so that it can sign other unsigned ELF binaries by passing OS's verification.
 
 ```bash
 $ ./elf-sign sign-target sha256 certs/kernel_key.pem certs/kernel_key.pem
@@ -42,7 +52,7 @@ Writing signature to: .text_sig
 Removing .text_sig
 ```
 
-To check the result, use `readelf` or `objdump`:
+The program will back up the `sign-target` to `sign-target.old`, and generate a new signed `sign-target`. To check the result, use `readelf` or `objdump`:
 
 ```bash
 $ readelf -a sign-target
@@ -118,7 +128,7 @@ This is the file for signing a signature. Also, the file should be compiled with
 
 ## License
 
-Copyright © Jingtang Zhang, 2020. ([MIT License](LICENSE))
+Copyright © 2020, Jingtang Zhang. ([MIT License](LICENSE))
 
 ---
 

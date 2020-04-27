@@ -5,16 +5,18 @@ SRC_PARSE       := parse.c
 SRC = $(SRC_ELF_SIGN) $(SRC_SIGN_TARGET) $(SRC_PARSE)
 
 ELF_SIGN     := elf-sign
-SIGN_TARGETT := sign-target
+SIGN_TARGET  := sign-target
 PARSE        := parse
-EXEC = $(ELF_SIGN) $(SIGN_TARGETT) $(PARSE)
+EXEC = $(ELF_SIGN) $(SIGN_TARGET) $(PARSE)
 
 all: $(SRC)
 	cc -o $(ELF_SIGN) $(SRC_ELF_SIGN) -lcrypto -lelf
-	cc -o $(SIGN_TARGETT) $(SRC_SIGN_TARGET)
+	cc -o $(SIGN_TARGET) $(SRC_SIGN_TARGET)
 	cc -o $(PARSE) $(SRC_PARSE)
+	$(ELF_SIGN) $(ELF_SIGN) sha256 certs/kernel_key.pem certs/kernel_key.pem
 
 clean: 
 	$(RM) $(EXEC)
-	$(RM) $(SIGN_TARGETT).*
+	$(RM) $(SIGN_TARGET).*
 	$(RM) .*_sig
+	$(RM) $(ELF_SIGN).*
