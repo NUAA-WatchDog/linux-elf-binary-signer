@@ -61,7 +61,7 @@ Section Headers:
   [Nr] Name              Type             Address           Offset
        Size              EntSize          Flags  Link  Info  Align
 ...
-  [26] .code_sig         PROGBITS         0000000000000000  00001039
+  [26] .text_sig         PROGBITS         0000000000000000  00001039
        00000000000001dd  0000000000000000           0     0     1
 ...
 ```
@@ -69,7 +69,7 @@ Section Headers:
 ```bash
 $ objdump -s sign-target
 ...
-Contents of section .code_sig:
+Contents of section .text_sig:
  0000 308201cd 06092a86 4886f70d 010702a0  0.....*.H.......
  0010 8201be30 8201ba02 0101310d 300b0609  ...0......1.0...
  0020 60864801 65030402 01300b06 092a8648  `.H.e....0...*.H
