@@ -22,14 +22,13 @@ Firstly, install the dependencies:
 $ sudo apt install libssl-dev libelf-dev binutils openssl
 ```
 
-Then, compile and test the tool by:
+Then, build the tool by `make` command:
 
 ```bash
 $ make
 cc -o elf-sign elf_sign.c -lcrypto -lelf
 cc -o sign-target sign_target.c
-cc -o parse parse.c
-elf-sign elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem
+./elf-sign.signed elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem
 elf-sign: 64-bit ELF object
 29 sections detected.
 Section 0014 .text
@@ -39,7 +38,7 @@ Writing signature to: .text_sig
 Removing .text_sig
 ```
 
-The `elf-sign` ELF binary will be signed by itself, so that it can sign other unsigned ELF binaries by passing OS's verification.
+The `elf-sign.signed` ELF binary has already been signed by the private key in `certs/kernel_key.pem`, so that it can pass OS's verification to sign the newly built `elf-sign`. Then, with a signed `elf-sign`, you can sign other ELF binary on our system.
 
 ```bash
 $ ./elf-sign sign-target sha256 certs/kernel_key.pem certs/kernel_key.pem
@@ -83,7 +82,7 @@ Contents of section .text_sig:
 ...
 ```
 
-It means the tools work fine.
+It means that the tool works fine.
 
 ## Generate Private Key
 
@@ -128,7 +127,7 @@ This is the file for signing a signature. Also, the file should be compiled with
 
 ## License
 
-Copyright © 2020, Jingtang Zhang. ([MIT License](LICENSE))
+Copyright © 2020, Jingtang Zhang, Hua Zong. ([MIT License](LICENSE))
 
 ---
 
