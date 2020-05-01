@@ -20,3 +20,4 @@ clean:
 	$(RM) $(SIGN_TARGET).*
 	$(RM) .*_sig
 	$(RM) $(ELF_SIGN) $(ELF_SIGN).old
+	$(RM) -r prev_test/
