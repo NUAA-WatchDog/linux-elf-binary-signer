@@ -4,7 +4,7 @@
  * 
  * Used for parsing a binary file to its hexadecimal representation.
  * 
- * @author mrdrivingduck@gmail.com
+ * @author Mr Dk.
  * @since 2020/04/24
  * 
  * ***********************************************************************/

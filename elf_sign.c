@@ -10,7 +10,7 @@
  * To compile this file, libssl and libelf should be installed. During
  * compilation, add "cc ... -lelf -lcrypto" to use these libraries.
  * 
- * @author mrdrivingduck@gmail.com
+ * @author Mr Dk.
  * @since 2020/04/20
  * @version 2020/04/25
  * 
