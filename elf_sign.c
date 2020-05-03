@@ -317,10 +317,11 @@ static void sign_segment(void *segment_buf, size_t segment_len,
 #else
 	ERR(i2d_PKCS7_bio(bd, pkcs7) < 0, "%s", "Fail to sign.");
 #endif
-	sig_size = BIO_number_written(bd);
-	sig_info.sig_len = htonl(sig_size);
-	ERR(BIO_write(bd, &sig_info, sizeof(sig_info)) < 0, "%s",
-		"Fail to write signature info.");
+
+	// sig_size = BIO_number_written(bd);
+	// sig_info.sig_len = htonl(sig_size);
+	// ERR(BIO_write(bd, &sig_info, sizeof(sig_info)) < 0, "%s",
+	// 	"Fail to write signature info.");
 
 	// BUF_MEM *bptr;
 	// BIO_get_mem_ptr(bd, &bptr);
@@ -472,7 +473,7 @@ int main(int argc, char **argv) {
 	Elf_Scn *scn = NULL;
 	GElf_Shdr shdr;
 	unsigned char *section_name, *p;
-	
+
 	/**
 	 * Iterate over sections.
 	 */
