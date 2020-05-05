@@ -10,6 +10,8 @@
  * To compile this file, libssl and libelf should be installed. During
  * compilation, add "cc ... -lelf -lcrypto" to use these libraries.
  * 
+ * Also, the program needs other programs including mv and objcopy.
+ * 
  * @author Mr Dk.
  * @since 2020/04/20
  * @version 2020/04/25
@@ -21,6 +23,8 @@
 #include <libelf.h>
 #include <gelf.h>
 #include <sys/wait.h>
+
+char SIG_SUFFIX[] = "_sig";
 
 /* Sign a module file using the given key.
  *
@@ -307,7 +311,7 @@ static void sign_section(void *segment_buf, size_t segment_len,
 
 	char new_sec_name[32];
 	strcpy(new_sec_name, section_name);
-	strcat(new_sec_name, "_sig");
+	strcat(new_sec_name, SIG_SUFFIX);
 
 	bd = BIO_new_file(new_sec_name, "wb");
 	// bd = BIO_new(BIO_s_mem());
@@ -348,7 +352,7 @@ static void add_signature_section(char *file_name, char *section_name) {
 
 	char sig_file_name[32];
 	strcpy(sig_file_name, section_name);
-	strcat(sig_file_name, "_sig");
+	strcat(sig_file_name, SIG_SUFFIX);
 
 	char new_section_name[64];
 	strcpy(new_section_name, sig_file_name);
@@ -384,6 +388,40 @@ static void add_signature_section(char *file_name, char *section_name) {
 	 */
 	remove(sig_file_name);
 	(void) printf("Removing %s\n", sig_file_name);
+}
+
+/**
+ * Remove the existing signature section to the specific ELF file,
+ * whose suffix of the section name is "_sig", e.g., .text_sig.
+ * 
+ * e.g. objcopy \
+ *          --remove-section .text_sig \
+ *          <elf-file>
+ * 
+ * @file_name: The ELF file whose signature section will be removed.
+ * @section_name: The name of the section to be removed.
+ */
+static void remove_signature_section(char *file_name, char *section_name) {
+	/**
+	 * Prepare for the arguments.
+	 */
+	char *argv[] = {
+		"objcopy",
+		"--remove-section", section_name,
+		file_name, NULL
+	};
+
+	/**
+	 * Fork a new process to invoke objcopy.
+	 */
+	int pid = fork();
+	if (pid == 0) {
+		ERR(execvp("objcopy", argv) < 0, "%s", "Failed to use objcopy.");
+		exit(0);
+	}
+	waitpid(pid, NULL, 0);
+
+	(void) printf("Removing original signature section: %s\n", section_name);
 }
 
 /**
@@ -428,13 +466,19 @@ static void elf_back_up(char *elf_file_name) {
  */
 int main(int argc, char **argv) {
 
+	char *elf_name = argv[1];
+	char *hash_algo = argv[2];
+	char *private_key_name = argv[3];
+	char *x509_name = argv[4];
+	char *dest_name = argv[5];
+
 	if (elf_version(EV_CURRENT) == EV_NONE) {
 		errx(EXIT_FAILURE, "ELF library initialization " "failed: %s", elf_errmsg(-1));
 	}
 
 	int fd = -1;
-	if ((fd = open(argv[1], O_RDWR, 0)) < 0) {
-		err(EXIT_FAILURE, "open \"%s\" failed", argv[1]);
+	if ((fd = open(elf_name, O_RDWR, 0)) < 0) {
+		err(EXIT_FAILURE, "open \"%s\" failed", elf_name);
 	}
 
 	Elf *elf = NULL;
@@ -443,14 +487,14 @@ int main(int argc, char **argv) {
 	}
 
 	if (elf_kind(elf) != ELF_K_ELF) {
-		errx(EXIT_FAILURE, "\"%s\" is not an ELF object.", argv[1]);
+		errx(EXIT_FAILURE, "\"%s\" is not an ELF object.", elf_name);
 	}
 
 	int version = 0;
 	if ((version = gelf_getclass(elf)) == ELFCLASSNONE) {
 		errx(EXIT_FAILURE, "getclass() failed: %s.", elf_errmsg(-1));
 	}
-	(void) printf("%s: %d-bit ELF object\n", argv[1], version == ELFCLASS32 ? 32 : 64);
+	(void) printf("%s: %d-bit ELF object\n", elf_name, version == ELFCLASS32 ? 32 : 64);
 
 	size_t sh_count = 0;
 	if (elf_getshdrnum(elf, &sh_count) != 0) {
@@ -463,11 +507,6 @@ int main(int argc, char **argv) {
 		errx(EXIT_FAILURE, "elf_getshdrstrndx() failed: %s.", elf_errmsg(-1));
 	}
 	// (void) printf("%ld section index\n", shstrndx);
-
-	char *hash_algo = argv[2];
-	char *private_key_name = argv[3];
-	char *x509_name = argv[4];
-	char *dest_name = argv[5];
 
 	Elf_Data *data = NULL;
 	Elf_Scn *scn = NULL;
@@ -493,6 +532,7 @@ int main(int argc, char **argv) {
 		 * Sign a section
 		 */
 		if (0 == strcmp(section_name, ".text")) {
+			
 			(void) printf("Section %-4.4jd %s\n",
 				(uintmax_t) elf_ndxscn(scn), section_name);
 			(void) printf("Length of section %s: %ld\n", section_name, shdr.sh_size);
@@ -529,6 +569,13 @@ int main(int argc, char **argv) {
 			// }
 
 			// sign_section(buf, count, hash_algo, private_key_name, x509_name, dest_name);
+
+		} else if (strlen(section_name) > 4 &&
+					0 == strncmp(
+						section_name + strlen(section_name) - (sizeof(SIG_SUFFIX) - 1),
+						SIG_SUFFIX,
+						sizeof(SIG_SUFFIX) - 1)) {
+			remove_signature_section(elf_name, section_name);
 		}
 	}
 
@@ -538,12 +585,12 @@ int main(int argc, char **argv) {
 	/**
 	 * Make a copy of unsigned file.
 	 */
-	elf_back_up(argv[1]);
+	elf_back_up(elf_name);
 
 	/**
 	 * Add signature section into target ELF.
 	 */
-	add_signature_section(argv[1], ".text");
+	add_signature_section(elf_name, ".text");
 
 	exit(EXIT_SUCCESS);
 }
