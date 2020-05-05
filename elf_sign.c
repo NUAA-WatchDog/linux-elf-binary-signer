@@ -231,18 +231,18 @@ static X509 *read_x509(const char *x509_name)
 /**
  * To sign the buffer and write the signature to the destination file.
  * 
- * @param segment_buf The buffer address to be signed.
- * @param segment_len The length of the buffer.
- * @param hash_algo The name of the hash algorithm for digest.
- * @param private_key_name The private-key file.
- * @param x509_name The X.509 file.
- * @param section_name The name of the section to be signed.
+ * @segment_buf: The buffer address to be signed.
+ * @segment_len: The length of the buffer.
+ * @hash_algo: The name of the hash algorithm for digest.
+ * @private_key_name: The private-key file.
+ * @x509_name: The X.509 file.
+ * @section_name: The name of the section to be signed.
  * 
  * @author Mr Dk.
  * @since 2020/04/24
- * @version 2020/04/25
+ * @version 2020/05/05
  */
-static void sign_segment(void *segment_buf, size_t segment_len,
+static void sign_section(void *segment_buf, size_t segment_len,
 	char *hash_algo, char *private_key_name, char *x509_name,
 	char *section_name) {
 
@@ -341,8 +341,8 @@ static void sign_segment(void *segment_buf, size_t segment_len,
  *          --set-section-flags .text_sig=readonly \
  *          <elf-file>
  * 
- * @param file_name The ELF file that will be appended a section.
- * @param section_name The name of the section being signed.
+ * @file_name: The ELF file that will be appended a section.
+ * @section_name: The name of the section being signed.
  */
 static void add_signature_section(char *file_name, char *section_name) {
 
@@ -389,7 +389,7 @@ static void add_signature_section(char *file_name, char *section_name) {
 /**
  * Make a copy of unsigned ELF file for back-up.
  * 
- * @param elf_file_name The ELF file name to be copied.
+ * @elf_file_name: The ELF file name to be copied.
  */
 static void elf_back_up(char *elf_file_name) {
 
@@ -415,11 +415,11 @@ static void elf_back_up(char *elf_file_name) {
  * 
  * The program entry point.
  * 
- * @argv[1] - The ELF file to be signed.
- * @argv[2] - The hash algorithm for making digest.
- * @argv[3] - The file containing private key.
- * @argv[4] - The file containing X.509.
- * @argv[5] - The destination file for storing signature.
+ * @argv[1]: The ELF file to be signed.
+ * @argv[2]: The hash algorithm for making digest.
+ * @argv[3]: The file containing private key.
+ * @argv[4]: The file containing X.509.
+ * @argv[5]: The destination file for storing signature.
  * 
  * @author Mr Dk.
  * @since 2020/04/20
@@ -490,19 +490,19 @@ int main(int argc, char **argv) {
 		}
 
 		/**
-		 * Code segment.
+		 * Sign a section
 		 */
 		if (0 == strcmp(section_name, ".text")) {
 			(void) printf("Section %-4.4jd %s\n",
 				(uintmax_t) elf_ndxscn(scn), section_name);
-			(void) printf("Code segment length: %ld\n", shdr.sh_size);
+			(void) printf("Length of section %s: %ld\n", section_name, shdr.sh_size);
 
 			if ((data = elf_getdata(scn, data)) == NULL) {
 				errx(EXIT_FAILURE, "elf_getdata() failed: %s.", elf_errmsg(-1));
 			}
 			
 			printf("Buffer size: %ld\n", data->d_size);
-			sign_segment(data->d_buf, data->d_size,
+			sign_section(data->d_buf, data->d_size,
 				hash_algo, private_key_name, x509_name, section_name);
 
 			// n = 0;
@@ -528,7 +528,7 @@ int main(int argc, char **argv) {
 			// 	}
 			// }
 
-			// sign_segment(buf, count, hash_algo, private_key_name, x509_name, dest_name);
+			// sign_section(buf, count, hash_algo, private_key_name, x509_name, dest_name);
 		}
 	}
 

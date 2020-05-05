@@ -18,6 +18,7 @@ all: $(SRC)
 clean: 
 	$(RM) $(EXEC)
 	$(RM) $(SIGN_TARGET).*
+	$(RM) $(ELF_SIGN)
 	$(RM) .*_sig
-	$(RM) $(ELF_SIGN) $(ELF_SIGN).old
+	$(RM) *.old
 	$(RM) -r prev_test/
