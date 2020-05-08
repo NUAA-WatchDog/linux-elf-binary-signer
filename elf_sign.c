@@ -251,7 +251,7 @@ static void sign_section(void *segment_buf, size_t segment_len,
 	char *section_name) {
 
 	struct elf_signature sig_info = { .id_type = PKEY_ID_PKCS7 };
-	unsigned long sig_size;
+	unsigned long sig_size = 0;
 	unsigned int use_signed_attrs;
 	const EVP_MD *digest_algo;
 	EVP_PKEY *private_key;
@@ -322,7 +322,9 @@ static void sign_section(void *segment_buf, size_t segment_len,
 	ERR(i2d_PKCS7_bio(bd, pkcs7) < 0, "%s", "Fail to sign.");
 #endif
 
-	// sig_size = BIO_number_written(bd);
+	sig_size = BIO_number_written(bd);
+	(void) printf("--- Signature size of [%s]: %ld\n", section_name, sig_size);
+
 	// sig_info.sig_len = htonl(sig_size);
 	// ERR(BIO_write(bd, &sig_info, sizeof(sig_info)) < 0, "%s",
 	// 	"Fail to write signature info.");
@@ -333,7 +335,7 @@ static void sign_section(void *segment_buf, size_t segment_len,
 
 	ERR(BIO_free(bd) < 0, "%s", "Fail to free signature buffer");
 
-	(void) printf("Writing signature to: %s\n", new_sec_name);
+	(void) printf("--- Writing signature to file: %s\n", new_sec_name);
 }
 
 /**
@@ -382,12 +384,13 @@ static void add_signature_section(char *file_name, char *section_name) {
 		exit(0);
 	}
 	waitpid(pid, NULL, 0);
+	(void) printf("--- Injecting signature section: [%s]\n", sig_file_name);
 
 	/**
 	 * Remove the signature file.
 	 */
 	remove(sig_file_name);
-	(void) printf("Removing %s\n", sig_file_name);
+	(void) printf("--- Removing temp signature file: %s\n", sig_file_name);
 }
 
 /**
@@ -421,7 +424,8 @@ static void remove_signature_section(char *file_name, char *section_name) {
 	}
 	waitpid(pid, NULL, 0);
 
-	(void) printf("Removing original signature section: %s\n", section_name);
+	(void) printf("--- Removing original signature section: %s\n",
+			section_name);
 }
 
 /**
@@ -494,13 +498,13 @@ int main(int argc, char **argv) {
 	if ((version = gelf_getclass(elf)) == ELFCLASSNONE) {
 		errx(EXIT_FAILURE, "getclass() failed: %s.", elf_errmsg(-1));
 	}
-	(void) printf("%s: %d-bit ELF object\n", elf_name, version == ELFCLASS32 ? 32 : 64);
+	(void) printf("--- [%s]: %d-bit ELF object\n", elf_name, version == ELFCLASS32 ? 32 : 64);
 
 	size_t sh_count = 0;
 	if (elf_getshdrnum(elf, &sh_count) != 0) {
 		errx(EXIT_FAILURE, "getshdrnum() failed: %s.", elf_errmsg(-1));
 	}
-	(void) printf("%ld sections detected.\n", sh_count);
+	(void) printf("--- %ld sections detected.\n", sh_count);
 
 	size_t shstrndx = 0;
 	if (elf_getshdrstrndx(elf, &shstrndx) != 0) {
@@ -533,15 +537,15 @@ int main(int argc, char **argv) {
 		 */
 		if (0 == strcmp(section_name, ".text")) {
 			
-			(void) printf("Section %-4.4jd %s\n",
+			(void) printf("--- Section %-4.4jd [%s] detected\n",
 				(uintmax_t) elf_ndxscn(scn), section_name);
-			(void) printf("Length of section %s: %ld\n", section_name, shdr.sh_size);
+			(void) printf("--- Length of section [%s]: %ld\n", section_name, shdr.sh_size);
 
 			if ((data = elf_getdata(scn, data)) == NULL) {
 				errx(EXIT_FAILURE, "elf_getdata() failed: %s.", elf_errmsg(-1));
 			}
 			
-			printf("Buffer size: %ld\n", data->d_size);
+			printf("--- Section [%s] Buffer size: %ld\n", section_name, data->d_size);
 			sign_section(data->d_buf, data->d_size,
 				hash_algo, private_key_name, x509_name, section_name);
 

@@ -57,4 +57,4 @@ elf-sign
 elf-sign.old
 parse
 vmlinux
-prev_target/
+prev_test/

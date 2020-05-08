@@ -3,11 +3,14 @@
 mkdir prev_test || (echo "cleaning"; rm -r prev_test; mkdir prev_test)
 cd prev_test
 
-targets=("ls" "cp" "mv")
-exec_count=100
+# targets=("cp" "df" "diff" "echo" "grep" "gcc" "git" "id" "join" "last" "ldd" "link" \
+# "locale" "look" "ls" "mv" "namei" "nice" "nohup" "print" "test" "time" "timeout" "touch" "uptime")
+targets=("cp" "df" "echo")
+exec_count=10
 
 for target in "${targets[@]}"
 do
+    echo
     cp /bin/${target} ./
     ../elf-sign.signed ./${target} sha256 ../certs/kernel_key.pem ../certs/kernel_key.pem
 
