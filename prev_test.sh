@@ -6,7 +6,7 @@ cd prev_test
 # targets=("cp" "df" "diff" "echo" "grep" "gcc" "git" "id" "join" "last" "ldd" "link" \
 # "locale" "look" "ls" "mv" "namei" "nice" "nohup" "print" "test" "time" "timeout" "touch" "uptime")
 targets=("cp" "df" "echo")
-exec_count=10
+exec_count=100
 
 for target in "${targets[@]}"
 do
@@ -17,13 +17,14 @@ do
     echo "@@@ Executing signed version of ${target} for ${exec_count} times."
     for ((i = 0; i < ${exec_count}; i++))
     do
-        ./${target} > /dev/null 2>&1
+        # ./${target} > /dev/null 2>&1
+        ./${target}
     done
 
-    echo "@@@ Executing original version of ${target} for ${exec_count} times."
-    for ((i = 0; i < ${exec_count}; i++))
-    do
-        ./${target}.old > /dev/null 2>&1
-    done
+    # echo "@@@ Executing original version of ${target} for ${exec_count} times."
+    # for ((i = 0; i < ${exec_count}; i++))
+    # do
+    #     ./${target}.old > /dev/null 2>&1
+    # done
     echo "@@@ ${target} done."
 done
