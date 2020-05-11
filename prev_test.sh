@@ -3,8 +3,8 @@
 mkdir prev_test || (echo "cleaning"; rm -r prev_test; mkdir prev_test)
 cd prev_test
 
-# targets=("cp" "df" "diff" "echo" "grep" "gcc" "git" "id" "join" "last" "ldd" "link" \
-# "locale" "look" "ls" "mv" "namei" "nice" "nohup" "print" "test" "time" "timeout" "touch" "uptime")
+# targets=("cp" "df" "echo" "false" "grep" "kill" "lesscat" "ls" "mkdir" \
+# "mount" "mv" "rm" "rmdir" "tar" "touch" "true" "umount" "uname" )
 targets=("cp" "df" "echo")
 exec_count=100
 
