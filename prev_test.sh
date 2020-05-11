@@ -17,8 +17,7 @@ do
     echo "@@@ Executing signed version of ${target} for ${exec_count} times."
     for ((i = 0; i < ${exec_count}; i++))
     do
-        # ./${target} > /dev/null 2>&1
-        ./${target}
+        ./${target} > /dev/null 2>&1
     done
 
     # echo "@@@ Executing original version of ${target} for ${exec_count} times."
