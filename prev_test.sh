@@ -5,8 +5,7 @@ cd prev_test
 
 targets=("cp" "df" "echo" "false" "grep" "kill" "less" "ls" "mkdir" \
     "mount" "mv" "rm" "rmdir" "tar" "touch" "true" "umount" "uname" )
-# targets=("cp" "df" "echo")
-exec_count=1
+exec_count=1000
 
 for target in "${targets[@]}"
 do
