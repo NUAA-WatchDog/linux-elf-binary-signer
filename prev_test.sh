@@ -3,10 +3,10 @@
 mkdir prev_test || (echo "cleaning"; rm -r prev_test; mkdir prev_test)
 cd prev_test
 
-# targets=("cp" "df" "echo" "false" "grep" "kill" "lesscat" "ls" "mkdir" \
-# "mount" "mv" "rm" "rmdir" "tar" "touch" "true" "umount" "uname" )
-targets=("cp" "df" "echo")
-exec_count=100
+targets=("cp" "df" "echo" "false" "grep" "kill" "less" "ls" "mkdir" \
+    "mount" "mv" "rm" "rmdir" "tar" "touch" "true" "umount" "uname" )
+# targets=("cp" "df" "echo")
+exec_count=1
 
 for target in "${targets[@]}"
 do
