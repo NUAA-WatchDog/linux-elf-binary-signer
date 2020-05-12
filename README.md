@@ -29,26 +29,30 @@ $ make
 cc -o elf-sign elf_sign.c -lcrypto -lelf
 cc -o sign-target sign_target.c
 ./elf-sign.signed elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem
-elf-sign: 64-bit ELF object
-29 sections detected.
-Section 0014 .text
-Code segment length: 5186
-Buffer size: 5186
-Writing signature to: .text_sig
-Removing .text_sig
+--- [elf-sign]: 64-bit ELF object
+--- 29 sections detected.
+--- Section 0014 [.text] detected
+--- Length of section [.text]: 5394
+--- Section [.text] Buffer size: 5394
+--- Signature size of [.text]: 465
+--- Writing signature to file: .text_sig
+--- Injecting signature section: [.text_sig]
+--- Removing temp signature file: .text_sig
 ```
 
 The `elf-sign.signed` ELF binary has already been signed by the private key in `certs/kernel_key.pem`, so that it can pass OS's verification to sign the newly built `elf-sign`. Then, with a signed `elf-sign`, you can sign other ELF binary on our system.
 
 ```bash
 $ ./elf-sign sign-target sha256 certs/kernel_key.pem certs/kernel_key.pem
-sign-target: 64-bit ELF object
-29 sections detected.
-Section 0014 .text
-Code segment length: 418
-Buffer size: 418
-Writing signature to: .text_sig
-Removing .text_sig
+--- [sign-target]: 64-bit ELF object
+--- 29 sections detected.
+--- Section 0014 [.text] detected
+--- Length of section [.text]: 418
+--- Section [.text] Buffer size: 418
+--- Signature size of [.text]: 465
+--- Writing signature to file: .text_sig
+--- Injecting signature section: [.text_sig]
+--- Removing temp signature file: .text_sig
 ```
 
 The program will back up the `sign-target` to `sign-target.old`, and generate a new signed `sign-target`. To check the result, use `readelf` or `objdump`:
@@ -86,7 +90,7 @@ It means that the tool works fine.
 
 ## Generate Private Key
 
-Configure some basic information of the key in `certs/x509.genkey`:
+Firstly, configure some basic information of the key in `certs/x509.genkey`:
 
 ```
 [ req ]
@@ -97,9 +101,9 @@ string_mask = utf8only
 x509_extensions = myexts
 
 [ req_distinguished_name ]
-#O = WatchDog
+O = WatchDog
 CN = ELF verification
-#emailAddress = mrdrivingduck@gmail.com
+emailAddress = mrdrivingduck@gmail.com
 
 [ myexts ]
 basicConstraints=critical,CA:FALSE
