@@ -14,16 +14,16 @@ do
     ../elf-sign.signed ./${target} sha256 \
         ../certs/kernel_key.pem ../certs/kernel_key.pem > /dev/null
 
-    echo "@@@ Executing signed version of ${target} for ${exec_count} times."
+    echo "*** Executing signed version of ${target} for ${exec_count} times."
     for ((i = 0; i < ${exec_count}; i++))
     do
         ./${target} > /dev/null 2>&1
     done
 
-    # echo "@@@ Executing original version of ${target} for ${exec_count} times."
+    # echo "*** Executing original version of ${target} for ${exec_count} times."
     # for ((i = 0; i < ${exec_count}; i++))
     # do
     #     ./${target}.old > /dev/null 2>&1
     # done
-    echo "@@@ ${target} done."
+    echo "*** ${target} done."
 done
