@@ -51,8 +51,8 @@ def audit_sv_cost(bin_name, sv_result_arr, no_sv_result_arr):
     print("---- COST: ", sv_time / no_sv_time)
 
 if __name__ == "__main__":
-    no_sv_result = open("prev-test-no-sv.log")
-    sv_result = open("prev-test.log")
+    no_sv_result = open("prev-test-no-sv-miu.log")
+    sv_result = open("prev-test-miu.log")
 
     no_sv_audit = {}
     sv_audit = {}
