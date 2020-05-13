@@ -9,6 +9,8 @@
 # Licensed under MIT.
 #
 
+import sys
+
 #
 # Parse the result of vm execution into the structure.
 # The target line is like: "[   44.257384] @@@./mount@@@790614".
@@ -51,8 +53,8 @@ def audit_sv_cost(bin_name, sv_result_arr, no_sv_result_arr):
     print("---- COST: ", sv_time / no_sv_time)
 
 if __name__ == "__main__":
-    no_sv_result = open("prev-test-no-sv.log")
-    sv_result = open("prev-test.log")
+    no_sv_result = open(sys.argv[1]) # no-sv-res
+    sv_result = open(sys.argv[2]) # sv-res
 
     no_sv_audit = {}
     sv_audit = {}
