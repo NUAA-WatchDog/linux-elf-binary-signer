@@ -15,8 +15,8 @@ import sys
 # Parse the result of vm execution into the structure.
 # The target line is like: "[   44.257384] @@@./mount@@@790614".
 #
-# file: the VM log file.
-# mapper: <ELF bin name, [time1, time2, ...]>
+# @file: the VM log file.
+# @mapper: <ELF bin name, [time1, time2, ...]>
 #
 def parse_result(file, mapper):
     for line in file:
@@ -33,9 +33,9 @@ def parse_result(file, mapper):
 #
 # Audit the cost of signature verification for one binary.
 #
-# bin_name: the name of ELF binary.
-# sv_result_arr: the execution time array of kernel with sv.
-# no_sv_result_arr: the exection time array of kernel without sv.
+# @bin_name: the name of ELF binary.
+# @sv_result_arr: the execution time array of kernel with sv.
+# @no_sv_result_arr: the exection time array of kernel without sv.
 #
 def audit_sv_cost(bin_name, sv_result_arr, no_sv_result_arr):
     if len(sv_result_arr) != len(no_sv_result_arr):
@@ -52,19 +52,32 @@ def audit_sv_cost(bin_name, sv_result_arr, no_sv_result_arr):
     print("---- NO-SV-time: ", no_sv_time)
     print("---- COST: ", sv_time / no_sv_time)
 
+#
+# Script entry.
+#
+# @since 2020/05/13
+#
+# @argv[1]: VM log without signature verification.
+# @argv[2]: VM log with signature verification.
+#
 if __name__ == "__main__":
     no_sv_result = open(sys.argv[1]) # no-sv-res
     sv_result = open(sys.argv[2]) # sv-res
 
+    # @key: ELF binary name
+    # @value: Array of execute time.
+    # e.g. <"./ls", [143, 144, 140, ...]>, <...>, ...
     no_sv_audit = {}
     sv_audit = {}
 
+    # Parse the result from VM log file.
     parse_result(no_sv_result, no_sv_audit)
     parse_result(sv_result, sv_audit)
 
     if len(sv_audit) != len(no_sv_audit):
         raise Exception("File format error.")
 
+    # Calculate the cost.
     for bin in no_sv_audit.keys():
         audit_sv_cost(bin, sv_audit[bin], no_sv_audit[bin])
 
