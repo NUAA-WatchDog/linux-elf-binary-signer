@@ -13,6 +13,7 @@ all: $(SRC)
 	cc -o $(ELF_SIGN) $(SRC_ELF_SIGN) -lcrypto -lelf
 	cc -o $(SIGN_TARGET) $(SRC_SIGN_TARGET)
 	# cc -o $(PARSE) $(SRC_PARSE)
+	cc -o add-section add_section.c -lelf
 	./$(ELF_SIGN).signed $(ELF_SIGN) sha256 certs/kernel_key.pem certs/kernel_key.pem
 
 clean: 
@@ -21,4 +22,4 @@ clean:
 	$(RM) $(ELF_SIGN)
 	$(RM) .*_sig
 	$(RM) *.old
-	$(RM) -r prev_test/
+	$(RM) -r test/prev_test

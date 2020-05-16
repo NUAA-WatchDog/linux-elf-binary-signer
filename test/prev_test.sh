@@ -11,8 +11,8 @@ for target in "${targets[@]}"
 do
     echo
     cp /bin/${target} ./
-    ../elf-sign.signed ./${target} sha256 \
-        ../certs/kernel_key.pem ../certs/kernel_key.pem > /dev/null
+    ../../elf-sign.signed ./${target} sha256 \
+        ../../certs/kernel_key.pem ../../certs/kernel_key.pem > /dev/null
 
     echo "*** Executing signed version of ${target} for ${exec_count} times."
     for ((i = 0; i < ${exec_count}; i++))
