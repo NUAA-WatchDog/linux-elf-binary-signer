@@ -23,6 +23,12 @@
 #include <fcntl.h>
 #include <elf.h>
 
+#define SCN_SYMTAB ".symtab"
+#define SCN_STRTAB ".strtab"
+#define SCN_SHSTRTAB ".shstrtab"
+#define SCN_TEXT ".text"
+#define SCN_TEXT_SIG ".text_sig"
+
 char SIG_SUFFIX[] = "_sig";
 
 /* Sign a module file using the given key.
@@ -391,8 +397,12 @@ static size_t file_modify(char *file_name, size_t pos,
 	size_t n = 0;
 	char buffer[512];
 
+	/**
+	 * Copy until reaching specified position.
+	 */
 	while (off < pos) {
 		if ((pos - off) <= sizeof(buffer)) {
+			/* Less than a buffer. */
 			n = read(fd_origin, buffer, pos - off);
 		} else {
 			n = read(fd_origin, buffer, sizeof(buffer));
@@ -414,6 +424,9 @@ static size_t file_modify(char *file_name, size_t pos,
 		ERR(n < 0, "Failed to ignore original ELF.");
 	}
 
+	/**
+	 * Copy the rest.
+	 */
 	while ((n = read(fd_origin, buffer, sizeof(buffer)))) {
 		ERR(n < 0, "Failed to read original ELF.");
 		off += n;
@@ -479,7 +492,7 @@ static void insert_new_section(char *file_name, char *section_name)
 	 */
 	Elf64_Shdr *shdr = (Elf64_Shdr *)
 			malloc(ehdr->e_shentsize * (ehdr->e_shnum + 1));
-	ERR(!shdr, "Failed to malloc.");
+	ERR(!shdr, "Failed to malloc for section header table.");
 	n = file_rw(fd, ehdr->e_shoff, shdr,
 			ehdr->e_shentsize * ehdr->e_shnum, FILE_READ);
 	ERR(n < 0, "Failed to read section header.");
@@ -489,9 +502,9 @@ static void insert_new_section(char *file_name, char *section_name)
 	 */
 	Elf64_Shdr *shdr_strtab = shdr + ehdr->e_shstrndx;
 	char *strtab = (char *) malloc(shdr_strtab->sh_size);
-	ERR(!strtab, "%s", "Failed to malloc.");
+	ERR(!strtab, "Failed to malloc for section header string table.");
 	n = file_rw(fd, shdr_strtab->sh_offset, strtab, shdr_strtab->sh_size, FILE_READ);
-	ERR(n < 0, "%s", "Failed to read string table.");
+	ERR(n < 0, "Failed to read section header string table.");
 
 	/**
 	 * Calculate the injected size of signature section data.
@@ -519,21 +532,27 @@ static void insert_new_section(char *file_name, char *section_name)
 	 * character offset in string table for the name index field
 	 * of the new section header entry.
 	 * 
-	 * Update the length of ".shstrtab" section in memory.
-	 * 
-	 * Also, make the data of ".shstrtab" to be aligned at 8-bytes,
+	 * Originally, the section header is aligned at 8-bytes. So
+	 * there are some paddings at the end of ".shstrtab". We firstly
+	 * override these bytes with the name of new section. If it is
+	 * not enough, we inject the rest characters of the section name,
+	 * and also make the data of ".shstrtab" to be aligned at 8-bytes,
 	 * so that the section header table will start at 8-bytes alignment.
+	 * 
+	 * Update the length of ".shstrtab" section in memory.
 	 */
-	long inject_strtab = strlen(section_name);
+	long inject_strtab = strlen(section_name) + 1;
 	long scn_name_off = shdr_strtab->sh_offset + shdr_strtab->sh_size;
 	long in_strtab_off = shdr_strtab->sh_size;
 	shdr_strtab->sh_size += inject_strtab;
 
-	long off_after_inject = scn_name_off +
-			(8 - scn_name_off % 8) +
-			inject_strtab;
-	if (off_after_inject % 8) {
-		inject_strtab += (8 - off_after_inject % 8);
+	long padding_override = 8 - scn_name_off % 8; /* Use existing paddings. */
+	n = file_rw(fd, scn_name_off, section_name, padding_override, FILE_WRITE);
+	ERR(n < 0, "Failed to override string table.");
+	inject_strtab -= padding_override; /* Rest to be injected. */
+
+	if (inject_strtab > 0 && inject_strtab % 8) {
+		inject_strtab += (8 - inject_strtab % 8); /* Padding to 8-bytes. */
 	}
 
 	/**
@@ -547,6 +566,14 @@ static void insert_new_section(char *file_name, char *section_name)
 	Elf64_Shdr *shdr_p = shdr + ehdr->e_shnum;
 	for (; shdr_p > shdr + ehdr->e_shnum - 3; shdr_p--) {
 		memcpy(shdr_p, shdr_p - 1, sizeof(Elf64_Shdr));
+
+		/* Last three section must be three of them. */
+		if (memcmp(strtab + shdr_p->sh_name, SCN_SYMTAB, sizeof(SCN_SYMTAB)) &&
+			memcmp(strtab + shdr_p->sh_name, SCN_STRTAB, sizeof(STRTAB)) &&
+			memcmp(strtab + shdr_p->sh_name, SCN_SHSTRTAB, sizeof(SCN_SHSTRTAB))) {
+			ERR(1, "Invalid layout of ELF.");
+		}
+		
 		shdr_p->sh_offset += inject_sig_len;
 		if (shdr_p->sh_link) {
 			shdr_p->sh_link += 1;
@@ -580,7 +607,10 @@ static void insert_new_section(char *file_name, char *section_name)
 	 */
 	ehdr->e_shstrndx += 1;
 	ehdr->e_shnum += 1;
-	ehdr->e_shoff += (inject_sig_len + inject_strtab);
+	ehdr->e_shoff += inject_sig_len;
+	if (inject_strtab > 0) {
+		ehdr->e_shoff += inject_strtab;
+	}
 
 	n = file_rw(fd, 0, ehdr, sizeof(Elf64_Ehdr), FILE_WRITE);
 	ERR(n < 0, "%s", "Failed to override ELF header.");
@@ -590,13 +620,15 @@ static void insert_new_section(char *file_name, char *section_name)
 	 * inject the real raw data, close the file descriptor.
 	 * 
 	 * Inject the section's name string first, or the offset may be
-	 * influenced by another call of file_modify().
+	 * influenced by the second call of file_modify().
 	 */
 	close(fd);
-	printf("%ld %ld\n", scn_name_off, inject_strtab);
-	file_modify(file_name, scn_name_off, section_name, inject_strtab, FILE_INJECT);
-	printf("%ld %ld\n", new_shdr->sh_offset, inject_sig_len);
-	file_modify(file_name, new_shdr->sh_offset, sig_buf, inject_sig_len, FILE_INJECT);
+	if (inject_strtab > 0) {
+		file_modify(file_name, scn_name_off + padding_override,
+			section_name + padding_override, inject_strtab, FILE_INJECT);
+	}
+	file_modify(file_name, new_shdr->sh_offset,
+			sig_buf, inject_sig_len, FILE_INJECT);
 
 	// int i = 0;
 	// for (Elf64_Shdr *shdr_p = shdr; i < ehdr->e_shnum; shdr_p++, i++) {
@@ -644,9 +676,6 @@ static void elf_back_up(char *elf_name) {
 	close(fd_backup);
 	close(fd_origin);
 }
-
-#define SCN_TEXT ".text"
-#define SCN_TEXT_SIG ".text_sig"
 
 /**
  * 
