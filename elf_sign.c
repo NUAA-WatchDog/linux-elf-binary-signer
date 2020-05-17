@@ -20,7 +20,6 @@
 
 #include <unistd.h>
 #include <fcntl.h>
-#include <sys/wait.h>
 #include <sys/types.h>
 #include <elf.h>
 
@@ -338,61 +337,6 @@ static void sign_section(void *segment_buf, size_t segment_len,
 	(void) printf(" --- Writing signature to file: %s\n", new_sec_name);
 }
 
-/**
- * Add a specific section to the specific ELF file.
- * The signature has already on the file system, e.g., .text_sig.
- * 
- * e.g. objcopy \
- *          --add-section .text_sig=.text_sig \
- *          --set-section-flags .text_sig=readonly \
- *          <elf-file>
- * 
- * @file_name: The ELF file that will be appended a section.
- * @section_name: The name of the section being signed.
- */
-// static void add_signature_section(char *file_name, char *section_name) {
-
-// 	char sig_file_name[32];
-// 	strcpy(sig_file_name, section_name);
-// 	strcat(sig_file_name, SIG_SUFFIX);
-
-// 	char new_section_name[64];
-// 	strcpy(new_section_name, sig_file_name);
-// 	strcat(new_section_name, "=");
-// 	strcat(new_section_name, sig_file_name);
-
-// 	char section_flags[64];
-// 	strcpy(section_flags, sig_file_name);
-// 	strcat(section_flags, "=readonly");
-
-// 	/**
-// 	 * Prepare for the arguments.
-// 	 */
-// 	char *argv[] = {
-// 		"objcopy",
-// 		"--add-section", new_section_name,
-// 		"--set-section-flags", section_flags,
-// 		file_name, NULL
-// 	};
-
-// 	/**
-// 	 * Fork a new process to invoke objcopy.
-// 	 */
-// 	int pid = fork();
-// 	if (pid == 0) {
-// 		ERR(execvp("objcopy", argv) < 0, "%s", "Failed to use objcopy.");
-// 		exit(0);
-// 	}
-// 	waitpid(pid, NULL, 0);
-// 	(void) printf("--- Injecting signature section: [%s]\n", sig_file_name);
-
-// 	/**
-// 	 * Remove the signature file.
-// 	 */
-// 	remove(sig_file_name);
-// 	(void) printf("--- Removing temp signature file: %s\n", sig_file_name);
-// }
-
 #define FILE_READ 0
 #define FILE_WRITE 1
 #define FILE_INJECT 2
@@ -453,6 +397,13 @@ static size_t file_modify(char *file_name, size_t pos,
 	return off;
 }
 
+/**
+ * Add a specific section to the specific ELF file.
+ * The signature has already on the file system, e.g., .text_sig.
+ * 
+ * @file_name: The ELF file that will be appended a section.
+ * @section_name: The name of the section being signed.
+ */
 static void insert_new_section(char *file_name, char *section_name)
 {
 	char sig_buf[2048];
@@ -497,9 +448,6 @@ static void insert_new_section(char *file_name, char *section_name)
 	if (scn_name_off + inject_strtab % 8) {
 		inject_strtab += (8 - ((scn_name_off + inject_strtab) % 8));
 	}
-	// inject_sh += inject_strtab;
-	// shdr_strtab->sh_offset -= inject_strtab;
-
 
 	for (Elf64_Shdr *shdr_p = shdr + ehdr->e_shnum; shdr_p > shdr + ehdr->e_shnum - 3; shdr_p--) {
 		memcpy(shdr_p, shdr_p - 1, sizeof(Elf64_Shdr));
@@ -542,6 +490,7 @@ static void insert_new_section(char *file_name, char *section_name)
 	// }
 
 	ERR(remove(section_name) < 0, "Failed to remove %s", section_name);
+	printf(" --- Removing temp signature file: %s\n", section_name);
 
 	free(strtab);
 	free(shdr);
@@ -550,41 +499,6 @@ static void insert_new_section(char *file_name, char *section_name)
 	shdr = NULL;
 	strtab = NULL;
 }
-
-/**
- * Remove the existing signature section to the specific ELF file,
- * whose suffix of the section name is "_sig", e.g., .text_sig.
- * 
- * e.g. objcopy \
- *          --remove-section .text_sig \
- *          <elf-file>
- * 
- * @file_name: The ELF file whose signature section will be removed.
- * @section_name: The name of the section to be removed.
- */
-// static void remove_signature_section(char *file_name, char *section_name) {
-// 	/**
-// 	 * Prepare for the arguments.
-// 	 */
-// 	char *argv[] = {
-// 		"objcopy",
-// 		"--remove-section", section_name,
-// 		file_name, NULL
-// 	};
-
-// 	/**
-// 	 * Fork a new process to invoke objcopy.
-// 	 */
-// 	int pid = fork();
-// 	if (pid == 0) {
-// 		ERR(execvp("objcopy", argv) < 0, "%s", "Failed to use objcopy.");
-// 		exit(0);
-// 	}
-// 	waitpid(pid, NULL, 0);
-
-// 	(void) printf("--- Removing original signature section: %s\n",
-// 			section_name);
-// }
 
 /**
  * Make a copy of unsigned ELF file for back up.
