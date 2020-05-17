@@ -14,15 +14,15 @@
  * 
  * @author Mr Dk.
  * @since 2020/04/20
- * @version 2020/04/25
+ * @version 2020/05/17
  * 
  * ***********************************************************************/
 
 #include <unistd.h>
 #include <fcntl.h>
-#include <libelf.h>
-#include <gelf.h>
 #include <sys/wait.h>
+#include <sys/types.h>
+#include <elf.h>
 
 char SIG_SUFFIX[] = "_sig";
 
@@ -323,7 +323,7 @@ static void sign_section(void *segment_buf, size_t segment_len,
 #endif
 
 	sig_size = BIO_number_written(bd);
-	(void) printf("--- Signature size of [%s]: %ld\n", section_name, sig_size);
+	(void) printf(" --- Signature size of [%s]: %ld\n", section_name, sig_size);
 
 	// sig_info.sig_len = htonl(sig_size);
 	// ERR(BIO_write(bd, &sig_info, sizeof(sig_info)) < 0, "%s",
@@ -335,7 +335,7 @@ static void sign_section(void *segment_buf, size_t segment_len,
 
 	ERR(BIO_free(bd) < 0, "%s", "Fail to free signature buffer");
 
-	(void) printf("--- Writing signature to file: %s\n", new_sec_name);
+	(void) printf(" --- Writing signature to file: %s\n", new_sec_name);
 }
 
 /**
@@ -350,47 +350,205 @@ static void sign_section(void *segment_buf, size_t segment_len,
  * @file_name: The ELF file that will be appended a section.
  * @section_name: The name of the section being signed.
  */
-static void add_signature_section(char *file_name, char *section_name) {
+// static void add_signature_section(char *file_name, char *section_name) {
 
-	char sig_file_name[32];
-	strcpy(sig_file_name, section_name);
-	strcat(sig_file_name, SIG_SUFFIX);
+// 	char sig_file_name[32];
+// 	strcpy(sig_file_name, section_name);
+// 	strcat(sig_file_name, SIG_SUFFIX);
 
-	char new_section_name[64];
-	strcpy(new_section_name, sig_file_name);
-	strcat(new_section_name, "=");
-	strcat(new_section_name, sig_file_name);
+// 	char new_section_name[64];
+// 	strcpy(new_section_name, sig_file_name);
+// 	strcat(new_section_name, "=");
+// 	strcat(new_section_name, sig_file_name);
 
-	char section_flags[64];
-	strcpy(section_flags, sig_file_name);
-	strcat(section_flags, "=readonly");
+// 	char section_flags[64];
+// 	strcpy(section_flags, sig_file_name);
+// 	strcat(section_flags, "=readonly");
 
-	/**
-	 * Prepare for the arguments.
-	 */
-	char *argv[] = {
-		"objcopy",
-		"--add-section", new_section_name,
-		"--set-section-flags", section_flags,
-		file_name, NULL
-	};
+// 	/**
+// 	 * Prepare for the arguments.
+// 	 */
+// 	char *argv[] = {
+// 		"objcopy",
+// 		"--add-section", new_section_name,
+// 		"--set-section-flags", section_flags,
+// 		file_name, NULL
+// 	};
 
-	/**
-	 * Fork a new process to invoke objcopy.
-	 */
-	int pid = fork();
-	if (pid == 0) {
-		ERR(execvp("objcopy", argv) < 0, "%s", "Failed to use objcopy.");
-		exit(0);
+// 	/**
+// 	 * Fork a new process to invoke objcopy.
+// 	 */
+// 	int pid = fork();
+// 	if (pid == 0) {
+// 		ERR(execvp("objcopy", argv) < 0, "%s", "Failed to use objcopy.");
+// 		exit(0);
+// 	}
+// 	waitpid(pid, NULL, 0);
+// 	(void) printf("--- Injecting signature section: [%s]\n", sig_file_name);
+
+// 	/**
+// 	 * Remove the signature file.
+// 	 */
+// 	remove(sig_file_name);
+// 	(void) printf("--- Removing temp signature file: %s\n", sig_file_name);
+// }
+
+#define FILE_READ 0
+#define FILE_WRITE 1
+#define FILE_INJECT 2
+#define FILE_WIPE 3
+
+static size_t file_rw(int fd, long off, void *buf, size_t size, int flag)
+{
+	size_t n = lseek(fd, off, SEEK_SET);
+	ERR(n < 0, "%s", "Failed to seek section header.");
+
+	return flag == FILE_WRITE ? write(fd, buf, size) :
+			(flag == FILE_READ ? read(fd, buf, size) : -1);
+}
+
+static size_t file_modify(char *file_name, size_t pos,
+		char *content, size_t len, int flag)
+{
+	char tmp_file_name[256];
+	strcpy(tmp_file_name, file_name);
+	strcat(tmp_file_name, ".tmp");
+
+	int fd_tmp = open(tmp_file_name, O_WRONLY | O_CREAT, 0777);
+	int fd_origin = open(file_name, O_RDONLY);
+
+	size_t off = 0;
+	size_t n = 0;
+	char buffer;
+
+	while (off < pos) {
+		n = read(fd_origin, &buffer, sizeof(buffer));
+		ERR(n < 0, "%s", "Failed to read original ELF.");
+		n = write(fd_tmp, &buffer, sizeof(buffer));
+		ERR(n < 0, "%s", "Failed to write tmp ELF.");
+		off++;
 	}
-	waitpid(pid, NULL, 0);
-	(void) printf("--- Injecting signature section: [%s]\n", sig_file_name);
 
-	/**
-	 * Remove the signature file.
-	 */
-	remove(sig_file_name);
-	(void) printf("--- Removing temp signature file: %s\n", sig_file_name);
+	if (flag == FILE_INJECT) {
+		n = write(fd_tmp, content, len);
+		ERR(n < 0, "%s", "Failed to inject tmp ELF.");
+		off += len;
+	} else if (flag == FILE_WIPE) {
+		n = lseek(fd_origin, len, SEEK_CUR);
+		ERR(n < 0, "%s", "Failed to ignore original ELF.");
+	}
+
+	while ((n = read(fd_origin, &buffer, sizeof(buffer)))) {
+		n = write(fd_tmp, &buffer, sizeof(buffer));
+		ERR(n < 0, "%s", "Failed to write tmp ELF.");
+		off++;
+	}
+
+	close(fd_origin);
+	close(fd_tmp);
+
+	remove(file_name);
+	rename(tmp_file_name, file_name);
+
+	return off;
+}
+
+static void insert_new_section(char *file_name, char *section_name)
+{
+	char sig_buf[2048];
+	size_t sig_len = 0;
+	size_t n = 0;
+	int fd = -1;
+
+	/* Reading signature. */
+	fd = open(section_name, O_RDONLY);
+	ERR(fd < 0, "%s", "Failed to open file.");
+	sig_len = read(fd, sig_buf, sizeof(sig_buf));
+	close(fd);
+
+	fd = open(file_name, O_RDWR);
+	ERR(fd < 0, "%s", "Failed to open file.");
+	Elf64_Ehdr *ehdr = (Elf64_Ehdr *) malloc(sizeof(Elf64_Ehdr));
+	ERR(!ehdr, "%s", "Failed to malloc ELF header.");
+	n = file_rw(fd, 0, ehdr, sizeof(Elf64_Ehdr), FILE_READ);
+	ERR(n < 0, "%s", "Failed to read ELF header.");
+
+	Elf64_Shdr *shdr = (Elf64_Shdr *) malloc(ehdr->e_shentsize * (ehdr->e_shnum + 1));
+	ERR(!shdr, "%s", "Failed to malloc.");
+	n = file_rw(fd, ehdr->e_shoff, shdr, ehdr->e_shentsize * ehdr->e_shnum, FILE_READ);
+	ERR(n < 0, "%s", "Failed to read section header.");
+
+	Elf64_Shdr *shdr_strtab = shdr + ehdr->e_shstrndx;
+	char *strtab = (char *) malloc(shdr_strtab->sh_size);
+	ERR(!strtab, "%s", "Failed to malloc.");
+	n = file_rw(fd, shdr_strtab->sh_offset, strtab, shdr_strtab->sh_size, FILE_READ);
+	ERR(n < 0, "%s", "Failed to read string table.");
+
+	long inject_sig_len = sig_len;
+	if (sig_len % 8) {
+		inject_sig_len += (8 - sig_len % 8);
+	}
+
+	long inject_strtab = strlen(section_name);
+	long scn_name_off = shdr_strtab->sh_offset + shdr_strtab->sh_size;
+	long in_strtab_off = shdr_strtab->sh_size;
+	shdr_strtab->sh_size += inject_strtab;
+
+	if (scn_name_off + inject_strtab % 8) {
+		inject_strtab += (8 - ((scn_name_off + inject_strtab) % 8));
+	}
+	// inject_sh += inject_strtab;
+	// shdr_strtab->sh_offset -= inject_strtab;
+
+
+	for (Elf64_Shdr *shdr_p = shdr + ehdr->e_shnum; shdr_p > shdr + ehdr->e_shnum - 3; shdr_p--) {
+		memcpy(shdr_p, shdr_p - 1, sizeof(Elf64_Shdr));
+		shdr_p->sh_offset += inject_sig_len;
+		if (shdr_p->sh_link) {
+			shdr_p->sh_link += 1;
+		}
+	}
+
+	Elf64_Shdr *new_shdr = shdr + ehdr->e_shnum - 3;
+	new_shdr->sh_addr = 0;
+	new_shdr->sh_addralign = 1;
+	new_shdr->sh_flags = SHF_OS_NONCONFORMING;
+	new_shdr->sh_name = in_strtab_off;
+	new_shdr->sh_type = SHT_PROGBITS;
+	new_shdr->sh_info = 0;
+	new_shdr->sh_link = 0;
+	new_shdr->sh_size = sig_len;
+
+	n = file_rw(fd, ehdr->e_shoff, shdr,
+			sizeof(Elf64_Shdr) * (ehdr->e_shnum + 1), FILE_WRITE);
+	ERR(n < 0, "%s", "Failed to override section header table.");
+
+	ehdr->e_shstrndx += 1;
+	ehdr->e_shnum += 1;
+	ehdr->e_shoff += (inject_sig_len + inject_strtab);
+
+	n = file_rw(fd, 0, ehdr, sizeof(Elf64_Ehdr), FILE_WRITE);
+	ERR(n < 0, "%s", "Failed to override ELF header.");
+
+
+	close(fd);
+
+	file_modify(file_name, scn_name_off, section_name, inject_strtab, FILE_INJECT);
+	file_modify(file_name, new_shdr->sh_offset, sig_buf, inject_sig_len, FILE_INJECT);
+
+	// int i = 0;
+	// for (Elf64_Shdr *shdr_p = shdr; i < ehdr->e_shnum; shdr_p++, i++) {
+	// 	printf("%02d %04ld %04ld %03d\n", i, shdr_p->sh_offset, shdr_p->sh_size, shdr_p->sh_name);
+	// }
+
+	ERR(remove(section_name) < 0, "Failed to remove %s", section_name);
+
+	free(strtab);
+	free(shdr);
+	free(ehdr);
+	ehdr = NULL;
+	shdr = NULL;
+	strtab = NULL;
 }
 
 /**
@@ -404,54 +562,57 @@ static void add_signature_section(char *file_name, char *section_name) {
  * @file_name: The ELF file whose signature section will be removed.
  * @section_name: The name of the section to be removed.
  */
-static void remove_signature_section(char *file_name, char *section_name) {
-	/**
-	 * Prepare for the arguments.
-	 */
-	char *argv[] = {
-		"objcopy",
-		"--remove-section", section_name,
-		file_name, NULL
-	};
+// static void remove_signature_section(char *file_name, char *section_name) {
+// 	/**
+// 	 * Prepare for the arguments.
+// 	 */
+// 	char *argv[] = {
+// 		"objcopy",
+// 		"--remove-section", section_name,
+// 		file_name, NULL
+// 	};
 
-	/**
-	 * Fork a new process to invoke objcopy.
-	 */
-	int pid = fork();
-	if (pid == 0) {
-		ERR(execvp("objcopy", argv) < 0, "%s", "Failed to use objcopy.");
-		exit(0);
-	}
-	waitpid(pid, NULL, 0);
+// 	/**
+// 	 * Fork a new process to invoke objcopy.
+// 	 */
+// 	int pid = fork();
+// 	if (pid == 0) {
+// 		ERR(execvp("objcopy", argv) < 0, "%s", "Failed to use objcopy.");
+// 		exit(0);
+// 	}
+// 	waitpid(pid, NULL, 0);
 
-	(void) printf("--- Removing original signature section: %s\n",
-			section_name);
-}
+// 	(void) printf("--- Removing original signature section: %s\n",
+// 			section_name);
+// }
 
 /**
- * Make a copy of unsigned ELF file for back-up.
+ * Make a copy of unsigned ELF file for back up.
  * 
- * @elf_file_name: The ELF file name to be copied.
+ * @elf_name: The ELF file name to be copied.
  */
-static void elf_back_up(char *elf_file_name) {
+static void elf_back_up(char *elf_name) {
 
-	char backup_file_name[256];
-	strcpy(backup_file_name, elf_file_name);
-	strcat(backup_file_name, ".old");
+	char backup_name[256];
+	strcpy(backup_name, elf_name);
+	strcat(backup_name, ".old");
 
-	char *argv[] = {
-		"cp",
-		elf_file_name, backup_file_name,
-		NULL
-	};
+	int fd_backup = open(backup_name, O_WRONLY | O_CREAT, 0777);
+	ERR(fd_backup < 0, "%s", "Failed to open back up file.");
+	int fd_origin = open(elf_name, O_RDONLY);
+	ERR(fd_origin < 0, "%s", "Failed to open origin file.");
 
-	int pid = fork();
-	if (pid == 0) {
-		ERR(execvp("cp", argv) < 0, "%s", "Failed to use cp.");
-		exit(0);
+	size_t len = 0;
+	while (len = read(fd_origin, backup_name, sizeof(backup_name))) {
+		write(fd_backup, backup_name, len);
 	}
-	waitpid(pid, NULL, 0);
+
+	close(fd_backup);
+	close(fd_origin);
 }
+
+#define SCN_TEXT ".text"
+#define SCN_TEXT_SIG ".text_sig"
 
 /**
  * 
@@ -476,115 +637,77 @@ int main(int argc, char **argv) {
 	char *x509_name = argv[4];
 	char *dest_name = argv[5];
 
-	if (elf_version(EV_CURRENT) == EV_NONE) {
-		errx(EXIT_FAILURE, "ELF library initialization " "failed: %s", elf_errmsg(-1));
-	}
-
 	int fd = -1;
-	if ((fd = open(elf_name, O_RDWR, 0)) < 0) {
-		err(EXIT_FAILURE, "open \"%s\" failed", elf_name);
+	size_t n = 0;
+
+	fd = open(elf_name, O_RDONLY);
+	ERR(fd < 0, "%s", "Failed to open file.");
+	Elf64_Ehdr *ehdr = (Elf64_Ehdr *) malloc(sizeof(Elf64_Ehdr));
+	ERR(!ehdr, "%s", "Failed to malloc ELF header.");
+	n = file_rw(fd, 0, ehdr, sizeof(Elf64_Ehdr), FILE_READ);
+	ERR(n < 0, "%s", "Failed to read ELF header.");
+
+	ERR(memcmp(ehdr->e_ident, ELFMAG, SELFMAG), "%s", "Invalid ELF file.");
+	ERR(ehdr->e_ident[EI_VERSION] != EV_CURRENT, "%s", "Not support ELF version.");
+	ERR(ehdr->e_ident[EI_CLASS] != ELFCLASS64, "%s", "Not support byte long.");
+	printf(" --- 64-bit ELF file, version 1 (CURRENT).\n");
+
+	switch (ehdr->e_ident[EI_DATA]) {
+		case ELFDATA2MSB:
+			printf(" --- Big endian.\n");
+			break;
+		case ELFDATA2LSB:
+			printf(" --- Little endian.\n");
+			break;
+		default:
+			ERR(1, "%s", "Not support data encoding.");
+			break;
 	}
 
-	Elf *elf = NULL;
-	if ((elf = elf_begin(fd, ELF_C_RDWR, NULL)) == NULL) {
-		errx(EXIT_FAILURE, "elf_begin() failed: %s.", elf_errmsg(-1));
-	}
+	printf(" --- %d sections detected.\n", ehdr->e_shnum);
 
-	if (elf_kind(elf) != ELF_K_ELF) {
-		errx(EXIT_FAILURE, "\"%s\" is not an ELF object.", elf_name);
-	}
+	/* Read section header table into memory. */
+	Elf64_Shdr *shdr = (Elf64_Shdr *) malloc(ehdr->e_shentsize * (ehdr->e_shnum));
+	ERR(!shdr, "%s", "Failed to malloc ELF section header table.");
+	n = file_rw(fd, ehdr->e_shoff, shdr, ehdr->e_shentsize * ehdr->e_shnum, FILE_READ);
+	ERR(n < 0, "%s", "Failed to read section header.");
 
-	int version = 0;
-	if ((version = gelf_getclass(elf)) == ELFCLASSNONE) {
-		errx(EXIT_FAILURE, "getclass() failed: %s.", elf_errmsg(-1));
-	}
-	(void) printf("--- [%s]: %d-bit ELF object\n", elf_name, version == ELFCLASS32 ? 32 : 64);
+	/* Read string table section into memory. */
+	Elf64_Shdr *shdr_strtab = shdr + ehdr->e_shstrndx;
+	char *strtab = (char *) malloc(shdr_strtab->sh_size);
+	ERR(!strtab, "%s", "Failed to malloc string table.");
+	n = file_rw(fd, shdr_strtab->sh_offset, strtab, shdr_strtab->sh_size, FILE_READ);
+	ERR(n < 0, "%s", "Failed to read string table.");
 
-	size_t sh_count = 0;
-	if (elf_getshdrnum(elf, &sh_count) != 0) {
-		errx(EXIT_FAILURE, "getshdrnum() failed: %s.", elf_errmsg(-1));
-	}
-	(void) printf("--- %ld sections detected.\n", sh_count);
+	int i = 0;
+	for (Elf64_Shdr *shdr_p = shdr; i < ehdr->e_shnum; shdr_p++, i++) {
+		char *scn_name = strtab + shdr_p->sh_name;
+		if (!memcmp(scn_name, SCN_TEXT, 5)) {
+			printf(" --- Section %-4.4d [%s] detected.\n", i, scn_name);
+			printf(" --- Length of section [%s]: %ld\n", scn_name, shdr_p->sh_size);
 
-	size_t shstrndx = 0;
-	if (elf_getshdrstrndx(elf, &shstrndx) != 0) {
-		errx(EXIT_FAILURE, "elf_getshdrstrndx() failed: %s.", elf_errmsg(-1));
-	}
-	// (void) printf("%ld section index\n", shstrndx);
+			char *scn_data = (char *) malloc(shdr_p->sh_size);
+			ERR(!scn_data, "%s", "Failed to malloc for section data.");
+			file_rw(fd, shdr_p->sh_offset, scn_data, shdr_p->sh_size, FILE_READ);
 
-	Elf_Data *data = NULL;
-	Elf_Scn *scn = NULL;
-	GElf_Shdr shdr;
-	unsigned char *section_name, *p;
+			sign_section(scn_data, shdr_p->sh_size,
+					hash_algo, private_key_name, x509_name, scn_name);
 
-	/**
-	 * Iterate over sections.
-	 */
-	while ((scn = elf_nextscn(elf, scn)) != NULL) {
-		/**
-		 * Get section header from section header table.
-		 * Get section name from section header name table.
-		 */
-		if (gelf_getshdr(scn, &shdr) != &shdr) {
-			errx(EXIT_FAILURE, "getshdr() failed: %s.", elf_errmsg(-1));
-		}
-		if ((section_name = elf_strptr(elf, shstrndx, shdr.sh_name)) == NULL) {
-			errx(EXIT_FAILURE, "elf_strptr() failed: %s.", elf_errmsg(-1));
-		}
+			free(scn_data);
+			scn_data = NULL;
 
-		/**
-		 * Sign a section
-		 */
-		if (0 == strcmp(section_name, ".text")) {
-			
-			(void) printf("--- Section %-4.4jd [%s] detected\n",
-				(uintmax_t) elf_ndxscn(scn), section_name);
-			(void) printf("--- Length of section [%s]: %ld\n", section_name, shdr.sh_size);
-
-			if ((data = elf_getdata(scn, data)) == NULL) {
-				errx(EXIT_FAILURE, "elf_getdata() failed: %s.", elf_errmsg(-1));
-			}
-			
-			printf("--- Section [%s] Buffer size: %ld\n", section_name, data->d_size);
-			sign_section(data->d_buf, data->d_size,
-				hash_algo, private_key_name, x509_name, section_name);
-
-			// n = 0;
-			// int count = 0;
-			// printf("Buffer size: %ld\n", data->d_size);
-			// while (n < shdr.sh_size && (data = elf_getdata(scn, data)) != NULL) {
-			// 	p = (unsigned char *) data->d_buf;
-			// char buf[1024*1024*7];
-			// 	printf("Buffer size: %ld\n", data->d_size);
-			// 	while (p < (unsigned char *) data->d_buf + data->d_size) {
-			// 		// printf("%02x", *p);
-			// 		buf[count] = *p;
-			// 		count++;
-			// 		n++;
-			// 		p++;
-			// 		// (void) putchar((n % 16) ? ' ' : '\n');
-			// 		if (count > sizeof(buf)) {
-			// 			break;
-			// 		}
-			// 	}
-			// 	if (count > sizeof(buf)) {
-			// 		break;
-			// 	}
-			// }
-
-			// sign_section(buf, count, hash_algo, private_key_name, x509_name, dest_name);
-
-		} else if (strlen(section_name) > 4 &&
-					0 == strncmp(
-						section_name + strlen(section_name) - (sizeof(SIG_SUFFIX) - 1),
-						SIG_SUFFIX,
-						sizeof(SIG_SUFFIX) - 1)) {
-			remove_signature_section(elf_name, section_name);
+		} else if (!memcmp(scn_name, SCN_TEXT_SIG, 9)) {
+			ERR(1, "%s", "File already been signed!");
 		}
 	}
 
-	(void) elf_end(elf);
-	(void) close(fd);
+	close(fd);
+	free(strtab);
+	free(shdr);
+	free(ehdr);
+	ehdr = NULL;
+	shdr = NULL;
+	strtab = NULL;
 
 	/**
 	 * Make a copy of unsigned file.
@@ -594,7 +717,8 @@ int main(int argc, char **argv) {
 	/**
 	 * Add signature section into target ELF.
 	 */
-	add_signature_section(elf_name, ".text");
+	// add_signature_section(elf_name, SCN_TEXT);
+	insert_new_section(elf_name, SCN_TEXT_SIG);
 
-	exit(EXIT_SUCCESS);
+	return 0;
 }
