@@ -13,13 +13,14 @@
  * 
  * @author Mr Dk.
  * @since 2020/04/20
- * @version 2020/05/17
+ * @version 2020/05/18
  * 
  * ***********************************************************************/
 
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>  
+#include <errno.h>
 #include <fcntl.h>
 #include <elf.h>
 
@@ -349,6 +350,13 @@ static void sign_section(void *segment_buf, size_t segment_len,
  * @author Mr Dk.
  * @since 2020/05/17
  */
+
+#define ERR_ENO(cond, errnum, fmt, ...)		\
+	if (cond) {								\
+		errno = errnum;						\
+		err(1, fmt, ## __VA_ARGS__);		\
+	}
+
 #define FILE_READ 0
 #define FILE_WRITE 1
 #define FILE_INJECT 2
@@ -367,7 +375,7 @@ static void sign_section(void *segment_buf, size_t segment_len,
 static size_t file_rw(int fd, long off, void *buf, size_t len, int flag)
 {
 	size_t n = lseek(fd, off, SEEK_SET);
-	ERR(n < 0, "Failed to seek section header.");
+	ERR_ENO(n < 0, EIO, "Failed to seek section header.");
 
 	return flag == FILE_WRITE ? write(fd, buf, len) :
 			(flag == FILE_READ ? read(fd, buf, len) : -1);
@@ -391,7 +399,9 @@ static size_t file_modify(char *file_name, size_t pos,
 	strcat(tmp_file_name, ".tmp");
 
 	int fd_tmp = open(tmp_file_name, O_WRONLY | O_CREAT, 0777);
+	ERR_ENO(fd_tmp < 0, EIO, "Failed to open file: %s", tmp_file_name);
 	int fd_origin = open(file_name, O_RDONLY);
+	ERR_ENO(fd_origin < 0, EIO, "Failed to open file: %s", file_name);
 
 	size_t off = 0;
 	size_t n = 0;
@@ -407,31 +417,31 @@ static size_t file_modify(char *file_name, size_t pos,
 		} else {
 			n = read(fd_origin, buffer, sizeof(buffer));
 		}
-		ERR(n < 0, "Failed to read original ELF.");
+		ERR_ENO(n < 0, EIO, "Failed to read original ELF.");
 		off += n;
 		n = write(fd_tmp, buffer, n);
-		ERR(n < 0, "Failed to write tmp ELF.");
+		ERR_ENO(n < 0, EIO, "Failed to write tmp ELF.");
 	}
 
 	if (flag == FILE_INJECT) {
 		/* Inject the additional content. */
 		n = write(fd_tmp, content, len);
-		ERR(n < 0, "Failed to inject tmp ELF.");
+		ERR_ENO(n < 0, EIO, "Failed to inject tmp ELF.");
 		off += len;
 	} else if (flag == FILE_WIPE) {
 		/* Ignore len bytes in original file. */
 		n = lseek(fd_origin, len, SEEK_CUR);
-		ERR(n < 0, "Failed to ignore original ELF.");
+		ERR_ENO(n < 0, EIO, "Failed to ignore original ELF.");
 	}
 
 	/**
 	 * Copy the rest.
 	 */
 	while ((n = read(fd_origin, buffer, sizeof(buffer)))) {
-		ERR(n < 0, "Failed to read original ELF.");
+		ERR_ENO(n < 0, EIO, "Failed to read original ELF.");
 		off += n;
 		n = write(fd_tmp, buffer, n);
-		ERR(n < 0, "Failed to write tmp ELF.");
+		ERR_ENO(n < 0, EIO, "Failed to write tmp ELF.");
 	}
 
 	close(fd_origin);
@@ -441,8 +451,8 @@ static size_t file_modify(char *file_name, size_t pos,
 	 * Remove the original file, rename the temporary file
 	 * to the original file.
 	 */
-	ERR(remove(file_name) < 0, "Failed to remove original file.");
-	ERR(rename(tmp_file_name, file_name) < 0,
+	ERR_ENO(remove(file_name) < 0, ENOENT, "Failed to remove original file.");
+	ERR_ENO(rename(tmp_file_name, file_name) < 0, ENOENT,
 			"Failed to rename original file.");
 
 	return off;
@@ -464,14 +474,15 @@ static void insert_new_section(char *file_name, char *section_name)
 	 * Prepared for the signature in memory.
 	 */
 	struct stat statbuff;
-	ERR(stat(section_name, &statbuff) < 0, "Failed to read signature length.");
+	ERR_ENO(stat(section_name, &statbuff) < 0, EIO,
+			"Failed to read signature length.");
 	size_t sig_len = statbuff.st_size;
 
 	char *sig_buf = (char *) malloc(sig_len);
-	ERR(!sig_buf, "Failed to malloc for signature data.");
+	ERR_ENO(!sig_buf, ENOMEM, "Failed to malloc for signature data.");
 
 	fd = open(section_name, O_RDONLY);
-	ERR(fd < 0, "Failed to open file.");
+	ERR_ENO(fd < 0, EIO, "Failed to open file.");
 	sig_len = read(fd, sig_buf, sig_len);
 	close(fd);
 
@@ -480,11 +491,11 @@ static void insert_new_section(char *file_name, char *section_name)
 	 * At first, load ELF Header into memory.
 	 */
 	fd = open(file_name, O_RDWR);
-	ERR(fd < 0, "Failed to open file.");
+	ERR_ENO(fd < 0, EIO, "Failed to open file.");
 	Elf64_Ehdr *ehdr = (Elf64_Ehdr *) malloc(sizeof(Elf64_Ehdr));
-	ERR(!ehdr, "Failed to malloc ELF header.");
+	ERR_ENO(!ehdr, ENOMEM, "Failed to malloc ELF header.");
 	n = file_rw(fd, 0, ehdr, sizeof(Elf64_Ehdr), FILE_READ);
-	ERR(n < 0, "Failed to read ELF header.");
+	ERR_ENO(n < 0, EIO, "Failed to read ELF header.");
 
 	/**
 	 * Load section header table into memory. Especially, allocate
@@ -492,19 +503,22 @@ static void insert_new_section(char *file_name, char *section_name)
 	 */
 	Elf64_Shdr *shdr = (Elf64_Shdr *)
 			malloc(ehdr->e_shentsize * (ehdr->e_shnum + 1));
-	ERR(!shdr, "Failed to malloc for section header table.");
+	ERR_ENO(!shdr, ENOMEM, "Failed to malloc for section header table.");
 	n = file_rw(fd, ehdr->e_shoff, shdr,
 			ehdr->e_shentsize * ehdr->e_shnum, FILE_READ);
-	ERR(n < 0, "Failed to read section header.");
+	ERR_ENO(n < 0, EIO, "Failed to read section header.");
 
 	/**
 	 * Load data of ".shstrtab" section to get all sections' name.
 	 */
 	Elf64_Shdr *shdr_strtab = shdr + ehdr->e_shstrndx;
 	char *strtab = (char *) malloc(shdr_strtab->sh_size);
-	ERR(!strtab, "Failed to malloc for section header string table.");
-	n = file_rw(fd, shdr_strtab->sh_offset, strtab, shdr_strtab->sh_size, FILE_READ);
-	ERR(n < 0, "Failed to read section header string table.");
+	ERR_ENO(!strtab, ENOMEM,
+			"Failed to malloc for section header string table.");
+	n = file_rw(fd, shdr_strtab->sh_offset, strtab,
+			shdr_strtab->sh_size, FILE_READ);
+	ERR_ENO(n < 0, EIO,
+			"Failed to read section header string table.");
 
 	/**
 	 * Calculate the injected size of signature section data.
@@ -548,7 +562,7 @@ static void insert_new_section(char *file_name, char *section_name)
 
 	long padding_override = 8 - scn_name_off % 8; /* Use existing paddings. */
 	n = file_rw(fd, scn_name_off, section_name, padding_override, FILE_WRITE);
-	ERR(n < 0, "Failed to override string table.");
+	ERR_ENO(n < 0, EIO, "Failed to override string table.");
 	inject_strtab -= padding_override; /* Rest to be injected. */
 
 	if (inject_strtab > 0 && inject_strtab % 8) {
@@ -569,9 +583,9 @@ static void insert_new_section(char *file_name, char *section_name)
 
 		/* Last three section must be three of them. */
 		if (memcmp(strtab + shdr_p->sh_name, SCN_SYMTAB, sizeof(SCN_SYMTAB)) &&
-			memcmp(strtab + shdr_p->sh_name, SCN_STRTAB, sizeof(STRTAB)) &&
+			memcmp(strtab + shdr_p->sh_name, SCN_STRTAB, sizeof(SCN_STRTAB)) &&
 			memcmp(strtab + shdr_p->sh_name, SCN_SHSTRTAB, sizeof(SCN_SHSTRTAB))) {
-			ERR(1, "Invalid layout of ELF.");
+			ERR_ENO(1, EBADMSG, "Invalid layout of ELF.");
 		}
 		
 		shdr_p->sh_offset += inject_sig_len;
@@ -596,7 +610,7 @@ static void insert_new_section(char *file_name, char *section_name)
 
 	n = file_rw(fd, ehdr->e_shoff, shdr,
 			sizeof(Elf64_Shdr) * (ehdr->e_shnum + 1), FILE_WRITE);
-	ERR(n < 0, "%s", "Failed to override section header table.");
+	ERR_ENO(n < 0, EIO, "Failed to override section header table.");
 
 	/**
 	 * Update the ELF header about the info of section header table, and
@@ -613,7 +627,7 @@ static void insert_new_section(char *file_name, char *section_name)
 	}
 
 	n = file_rw(fd, 0, ehdr, sizeof(Elf64_Ehdr), FILE_WRITE);
-	ERR(n < 0, "%s", "Failed to override ELF header.");
+	ERR_ENO(n < 0, EIO, "Failed to override ELF header.");
 
 	/**
 	 * Now the override of the file completes. Before starting to
@@ -630,16 +644,19 @@ static void insert_new_section(char *file_name, char *section_name)
 	file_modify(file_name, new_shdr->sh_offset,
 			sig_buf, inject_sig_len, FILE_INJECT);
 
-	// int i = 0;
-	// for (Elf64_Shdr *shdr_p = shdr; i < ehdr->e_shnum; shdr_p++, i++) {
-	// 	printf("%02d %04ld %04ld %03d\n", i, shdr_p->sh_offset, shdr_p->sh_size, shdr_p->sh_name);
-	// }
+	/*
+	int i = 0;
+	for (Elf64_Shdr *shdr_p = shdr; i < ehdr->e_shnum; shdr_p++, i++) {
+		printf("%02d %04ld %04ld %03d\n", i, shdr_p->sh_offset, shdr_p->sh_size, shdr_p->sh_name);
+	}
+	*/
 
 	/**
 	 * Injection is successful, clean up the signature data file.
 	 * Clean up the memory.
 	 */
-	ERR(remove(section_name) < 0, "Failed to remove %s", section_name);
+	ERR_ENO(remove(section_name) < 0, ENOENT,
+			"Failed to remove %s", section_name);
 	printf(" --- Removing temp signature file: %s\n", section_name);
 
 	free(sig_buf);
@@ -657,16 +674,16 @@ static void insert_new_section(char *file_name, char *section_name)
  * 
  * @elf_name: The ELF file name to be copied.
  */
-static void elf_back_up(char *elf_name) {
-
+static void elf_back_up(char *elf_name)
+{
 	char backup_name[256];
 	strcpy(backup_name, elf_name);
 	strcat(backup_name, ".old");
 
 	int fd_backup = open(backup_name, O_WRONLY | O_CREAT, 0777);
-	ERR(fd_backup < 0, "%s", "Failed to open back up file.");
+	ERR_ENO(fd_backup < 0, EIO, "Failed to open back up file.");
 	int fd_origin = open(elf_name, O_RDONLY);
-	ERR(fd_origin < 0, "%s", "Failed to open origin file.");
+	ERR_ENO(fd_origin < 0, EIO, "Failed to open origin file.");
 
 	size_t len = 0;
 	while (len = read(fd_origin, backup_name, sizeof(backup_name))) {
@@ -708,15 +725,18 @@ int main(int argc, char **argv) {
 	 * in-memory ELF header.
 	 */
 	fd = open(elf_name, O_RDONLY);
-	ERR(fd < 0, "%s", "Failed to open file.");
+	ERR_ENO(fd < 0, EIO, "Failed to open file: %s", elf_name);
 	Elf64_Ehdr *ehdr = (Elf64_Ehdr *) malloc(sizeof(Elf64_Ehdr));
-	ERR(!ehdr, "%s", "Failed to malloc ELF header.");
+	ERR_ENO(!ehdr, ENOMEM, "Failed to malloc for ELF header.");
 	n = file_rw(fd, 0, ehdr, sizeof(Elf64_Ehdr), FILE_READ);
-	ERR(n < 0, "%s", "Failed to read ELF header.");
+	ERR_ENO(n < 0, EIO, "Failed to read ELF header.");
 
-	ERR(memcmp(ehdr->e_ident, ELFMAG, SELFMAG), "%s", "Invalid ELF file.");
-	ERR(ehdr->e_ident[EI_VERSION] != EV_CURRENT, "%s", "Not support ELF version.");
-	ERR(ehdr->e_ident[EI_CLASS] != ELFCLASS64, "%s", "Not support byte long.");
+	ERR_ENO(memcmp(ehdr->e_ident, ELFMAG, SELFMAG), EBADMSG,
+			"Invalid ELF file: %s", elf_name);
+	ERR_ENO(ehdr->e_ident[EI_VERSION] != EV_CURRENT, EBADMSG,
+			"Not support ELF version.");
+	ERR_ENO(ehdr->e_ident[EI_CLASS] != ELFCLASS64, EBADMSG,
+			"Not support byte long.");
 	printf(" --- 64-bit ELF file, version 1 (CURRENT).\n");
 
 	switch (ehdr->e_ident[EI_DATA]) {
@@ -727,7 +747,7 @@ int main(int argc, char **argv) {
 			printf(" --- Little endian.\n");
 			break;
 		default:
-			ERR(1, "%s", "Not support data encoding.");
+			ERR_ENO(1, EBADMSG, "Not support data encoding.");
 			break;
 	}
 
@@ -738,17 +758,17 @@ int main(int argc, char **argv) {
 	 */
 	Elf64_Shdr *shdr = (Elf64_Shdr *)
 			malloc(ehdr->e_shentsize * (ehdr->e_shnum));
-	ERR(!shdr, "%s", "Failed to malloc ELF section header table.");
+	ERR_ENO(!shdr, EIO, "Failed to malloc ELF section header table.");
 	n = file_rw(fd, ehdr->e_shoff, shdr,
 			ehdr->e_shentsize * ehdr->e_shnum, FILE_READ);
-	ERR(n < 0, "%s", "Failed to read section header.");
+	ERR_ENO(n < 0, EIO, "Failed to read section header table.");
 
 	Elf64_Shdr *shdr_strtab = shdr + ehdr->e_shstrndx;
 	char *strtab = (char *) malloc(shdr_strtab->sh_size);
-	ERR(!strtab, "%s", "Failed to malloc string table.");
+	ERR_ENO(!strtab, EIO, "Failed to malloc for string table.");
 	n = file_rw(fd, shdr_strtab->sh_offset, strtab,
 			shdr_strtab->sh_size, FILE_READ);
-	ERR(n < 0, "%s", "Failed to read string table.");
+	ERR_ENO(n < 0, EIO, "Failed to read string table.");
 
 	/**
 	 * Iterate over sections to find the section being signed.
@@ -757,13 +777,14 @@ int main(int argc, char **argv) {
 	int i = 0;
 	for (Elf64_Shdr *shdr_p = shdr; i < ehdr->e_shnum; shdr_p++, i++) {
 		char *scn_name = strtab + shdr_p->sh_name;
-		if (!memcmp(scn_name, SCN_TEXT, 5)) {
+		if (!memcmp(scn_name, SCN_TEXT, sizeof(SCN_TEXT))) {
 			printf(" --- Section %-4.4d [%s] detected.\n", i, scn_name);
 			printf(" --- Length of section [%s]: %ld\n",
 					scn_name, shdr_p->sh_size);
 
 			char *scn_data = (char *) malloc(shdr_p->sh_size);
-			ERR(!scn_data, "%s", "Failed to malloc for section data.");
+			ERR_ENO(!scn_data, ENOMEM,
+					"Failed to malloc for data of section %s.", scn_name);
 			file_rw(fd, shdr_p->sh_offset, scn_data,
 					shdr_p->sh_size, FILE_READ);
 
@@ -773,8 +794,9 @@ int main(int argc, char **argv) {
 			free(scn_data);
 			scn_data = NULL;
 
-		} else if (!memcmp(scn_name, SCN_TEXT_SIG, 9)) {
-			ERR(1, "%s", "File already been signed!");
+		} else if (!memcmp(scn_name, SCN_TEXT_SIG, sizeof(SCN_TEXT_SIG))) {
+			ERR_ENO(1, EBADMSG,
+					"File already been signed with section: [%s]", scn_name);
 		}
 	}
 

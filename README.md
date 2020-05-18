@@ -10,49 +10,68 @@ Created by : Mr Dk.
 
 ## About
 
-It is tool for protecting the integrity of an ELF binary. It extracts the `.text` section of an ELF, and sign it with **RSA** private key. Finally, append the signature as another section.
+It is tool for protecting the integrity of an ELF binary. It extracts the `.text` section of an ELF, and sign it with *RSA* private key. Finally, append the signature as another section.
 
-For a [Linux kernel with signature verification function](https://github.com/mrdrivingduck/kernel-with-elf-signature-verification), during the process of `execve()` system call, it will extract the signed section and the signature section, and verify the integrity of the ELF binary. If it cannot pass the verification, the ELF will not be executed. The certificate for verification should be compiled with Linux kernel together.
+For a [Linux kernel with signature verification](https://github.com/mrdrivingduck/linux-kernel-elf-sig-verify), during the process of `execve()` system call, it will extract the signed section and the signature section, and verify the integrity of the ELF binary. If it cannot pass the verification, the ELF will not be executed. The certificate for verification should be compiled with Linux kernel together.
 
 ## Sign an ELF Binary
 
 Firstly, install the dependencies:
 
 ```bash
-$ sudo apt install libssl-dev libelf-dev binutils openssl
+$ sudo apt install libssl-dev openssl
+```
+
+To check the result, you need:
+
+```bash
+$ sudo apt install binutils
 ```
 
 Then, build the tool by `make` command:
 
 ```bash
 $ make
-cc -o elf-sign elf_sign.c -lcrypto -lelf
+cc -o elf-sign elf_sign.c -lcrypto
 cc -o sign-target sign_target.c
 ./elf-sign.signed elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem
---- [elf-sign]: 64-bit ELF object
---- 29 sections detected.
---- Section 0014 [.text] detected
---- Length of section [.text]: 5394
---- Section [.text] Buffer size: 5394
---- Signature size of [.text]: 465
---- Writing signature to file: .text_sig
---- Injecting signature section: [.text_sig]
---- Removing temp signature file: .text_sig
+ --- 64-bit ELF file, version 1 (CURRENT).
+ --- Little endian.
+ --- 29 sections detected.
+ --- Section 0014 [.text] detected.
+ --- Length of section [.text]: 8000
+ --- Signature size of [.text]: 465
+ --- Writing signature to file: .text_sig
+ --- Removing temp signature file: .text_sig
 ```
 
 The `elf-sign.signed` ELF binary has already been signed by the private key in `certs/kernel_key.pem`, so that it can pass OS's verification to sign the newly built `elf-sign`. Then, with a signed `elf-sign`, you can sign other ELF binary on our system.
 
+> If you want to generate your own key, you will need to sign the `elf-sign` binary by your own key on a kernel **without** signature verification, because the newly compiled `elf-sign` has no signature section. After injecting signature section, it can be executed by a kernel **with** signature verification.
+>
+> If you just want to test the function with `certs/kernel_key.pem`, use the given `elf-sign.signed` to sign `elf-sign` after its building (which will be done automatically by `Makefile` on `make` command). The `elf-sign.signed` has been signed with keys in `certs/kernel_key.pem` and it can be directly executed on a kernel with signature verification to sign your `elf-sign`.
+
+The ELF file `sign-target` built from `sign_target.c` is a very simple C program, and it is only used for testing:
+
+```c
+#include <stdio.h>
+
+int main() {
+    printf("Hello world\n");
+    return 0;
+}
+```
+
 ```bash
 $ ./elf-sign sign-target sha256 certs/kernel_key.pem certs/kernel_key.pem
---- [sign-target]: 64-bit ELF object
---- 29 sections detected.
---- Section 0014 [.text] detected
---- Length of section [.text]: 418
---- Section [.text] Buffer size: 418
---- Signature size of [.text]: 465
---- Writing signature to file: .text_sig
---- Injecting signature section: [.text_sig]
---- Removing temp signature file: .text_sig
+ --- 64-bit ELF file, version 1 (CURRENT).
+ --- Little endian.
+ --- 29 sections detected.
+ --- Section 0014 [.text] detected.
+ --- Length of section [.text]: 418
+ --- Signature size of [.text]: 465
+ --- Writing signature to file: .text_sig
+ --- Removing temp signature file: .text_sig
 ```
 
 The program will back up the `sign-target` to `sign-target.old`, and generate a new signed `sign-target`. To check the result, use `readelf` or `objdump`:
