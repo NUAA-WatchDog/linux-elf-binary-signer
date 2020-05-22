@@ -861,18 +861,23 @@ static __attribute__((noreturn))
 void format(void)
 {
 	fprintf(stderr,
-		"Usage: elf-sign [-ch] <hash algo> <key> <x509> <elf-file> [<dest-file>]\n");
+		"Usage: elf-sign [-ch] <hash-algo> <key> <x509> <elf-file> [<dest-file>]\n");
+	fprintf(stderr, "  -c,         compact signing mode for old ELF binary\n");
+	fprintf(stderr, "  -h,         display the help and exit\n");
+	fprintf(stderr, "\nSign the <elf-file> to an optional <dest-file> with\n");
+	fprintf(stderr, "private key in <key> and public key certificate in <x509>\n");
+	fprintf(stderr, "and the digest algorithm specified by <hash-algo>. If no \n");
+	fprintf(stderr, "<dest-file> is specified, the <elf-file> will be backup to \n");
+	fprintf(stderr, "<elf-file>.old, and the original <elf-file> will be signed.\n");
 	exit(2);
 }
 
 /**
- * 
  * The program entry point.
  * 
  * @author Mr Dk.
  * @since 2020/04/20
  * @version 2020/05/22
- * 
  */
 int main(int argc, char **argv) {
 

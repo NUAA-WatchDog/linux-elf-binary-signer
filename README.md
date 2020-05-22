@@ -62,6 +62,21 @@ int main() {
 }
 ```
 
+The usage is as follow:
+
+```bash
+$ ./elf-sign
+Usage: elf-sign [-ch] <hash-algo> <key> <x509> <elf-file> [<dest-file>]
+  -c,         compact signing mode for old ELF binary
+  -h,         display the help and exit
+
+Sign the <elf-file> to an optional <dest-file> with
+private key in <key> and public key certificate in <x509>
+and the digest algorithm specified by <hash-algo>. If no 
+<dest-file> is specified, the <elf-file> will be backup to 
+<elf-file>.old, and the original <elf-file> will be signed.
+```
+
 ```bash
 $ ./elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem sign-target
  --- 64-bit ELF file, version 1 (CURRENT).
