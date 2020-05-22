@@ -34,12 +34,12 @@ Then, build the tool by `make` command:
 $ make
 cc -o elf-sign elf_sign.c -lcrypto
 cc -o sign-target sign_target.c
-./elf-sign.signed elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem
+./elf-sign.signed sha256 certs/kernel_key.pem certs/kernel_key.pem elf-sign
  --- 64-bit ELF file, version 1 (CURRENT).
  --- Little endian.
  --- 29 sections detected.
  --- Section 0014 [.text] detected.
- --- Length of section [.text]: 8000
+ --- Length of section [.text]: 10192
  --- Signature size of [.text]: 465
  --- Writing signature to file: .text_sig
  --- Removing temp signature file: .text_sig
@@ -63,7 +63,7 @@ int main() {
 ```
 
 ```bash
-$ ./elf-sign sign-target sha256 certs/kernel_key.pem certs/kernel_key.pem
+$ ./elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem sign-target
  --- 64-bit ELF file, version 1 (CURRENT).
  --- Little endian.
  --- 29 sections detected.
@@ -106,6 +106,24 @@ Contents of section .text_sig:
 ```
 
 It means that the tool works fine.
+
+## Sign an old ELF binary
+
+For an old ELF binary like [GNU core utilities](https://www.gnu.org/software/coreutils/), the layout of the ELF is different from modern ELF. To sign such an ELF, use the **compact** option. ATTENTION, to sign a modern ELF, the compact option is not recommended.
+
+```bash
+$ ./elf-sign -c sha256 certs/kernel_key.pem certs/kernel_key.pem /bin/ls signed-ls
+ --- 64-bit ELF file, version 1 (CURRENT).
+ --- Little endian.
+ --- 28 sections detected.
+ --- Section 0014 [.text] detected.
+ --- Length of section [.text]: 74969
+ --- Signature size of [.text]: 465
+ --- Writing signature to file: .text_sig
+ --- Removing temp signature file: .text_sig
+$ ./signed-ls
+...
+```
 
 ## Generate Private Key
 

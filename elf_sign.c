@@ -653,6 +653,176 @@ static void insert_new_section(char *file_name, char *section_name)
 }
 
 /**
+ * Add a specific section to the specific ELF file.
+ * The signature has already on the file system, e.g., .text_sig.
+ * 
+ * Compact version for signing old ELF files like GNU core-utils.
+ * 
+ * @file_name: The ELF file that will be appended a section.
+ * @section_name: The name of the section being signed.
+ */
+static void insert_new_section_compact(char *file_name, char *section_name)
+{
+	size_t n = 0;
+	int fd = -1;
+
+	/**
+	 * Prepared for the signature in memory.
+	 */
+	struct stat statbuff;
+	ERR_ENO(stat(section_name, &statbuff) < 0, EIO,
+			"Failed to read signature length.");
+	size_t sig_len = statbuff.st_size;
+
+	char *sig_buf = (char *) malloc(sig_len);
+	ERR_ENO(!sig_buf, ENOMEM, "Failed to malloc for signature data.");
+
+	fd = open(section_name, O_RDONLY);
+	ERR_ENO(fd < 0, EIO, "Failed to open file.");
+	sig_len = read(fd, sig_buf, sig_len);
+	close(fd);
+
+	/**
+	 * Start to parse the ELF file.
+	 * At first, load ELF Header into memory.
+	 */
+	fd = open(file_name, O_RDWR);
+	ERR_ENO(fd < 0, EIO, "Failed to open file.");
+	Elf64_Ehdr *ehdr = (Elf64_Ehdr *) malloc(sizeof(Elf64_Ehdr));
+	ERR_ENO(!ehdr, ENOMEM, "Failed to malloc ELF header.");
+	n = file_rw(fd, 0, ehdr, sizeof(Elf64_Ehdr), FILE_READ);
+	ERR_ENO(n < 0, EIO, "Failed to read ELF header.");
+
+	/**
+	 * Load section header table into memory. Especially, allocate
+	 * ONE MORE ROOM for the new section header table entry.
+	 */
+	Elf64_Shdr *shdr = (Elf64_Shdr *)
+			malloc(ehdr->e_shentsize * (ehdr->e_shnum + 1));
+	ERR_ENO(!shdr, ENOMEM, "Failed to malloc for section header table.");
+	n = file_rw(fd, ehdr->e_shoff, shdr,
+			ehdr->e_shentsize * ehdr->e_shnum, FILE_READ);
+	ERR_ENO(n < 0, EIO, "Failed to read section header.");
+
+	/**
+	 * Load data of ".shstrtab" section to get all sections' name.
+	 */
+	Elf64_Shdr *shdr_strtab = shdr + ehdr->e_shstrndx;
+	char *strtab = (char *) malloc(shdr_strtab->sh_size);
+	ERR_ENO(!strtab, ENOMEM,
+			"Failed to malloc for section header string table.");
+	n = file_rw(fd, shdr_strtab->sh_offset, strtab,
+			shdr_strtab->sh_size, FILE_READ);
+	ERR_ENO(n < 0, EIO,
+			"Failed to read section header string table.");
+
+	/**
+	 * Calculate the injected size of signature section data.
+	 */
+	long inject_sig_len = sig_len;
+
+	/**
+	 * Calculate the injected size into the string table section,
+	 * for the section name of the new section.
+	 * 
+	 * Calculate the offset in file to inject, and calculate the
+	 * character offset in string table for the name index field
+	 * of the new section header entry.
+	 * 
+	 * Update the length of ".shstrtab" section in memory.
+	 */
+	long inject_strtab = strlen(section_name) + 1;
+	long scn_name_off = shdr_strtab->sh_offset + shdr_strtab->sh_size;
+	long in_strtab_off = shdr_strtab->sh_size;
+	shdr_strtab->sh_size += inject_strtab;
+
+	/**
+	 * Move the last section (.shstrtab) backward, using the one
+	 * addtional room allocated before.
+	 * 
+	 * During memcpy, update the section data's offset in file (Adding 
+	 * the length of the signature data).
+	 */
+	Elf64_Shdr *shdr_p = shdr + ehdr->e_shnum;
+	memcpy(shdr_p, shdr_p - 1, sizeof(Elf64_Shdr));
+	if (memcmp(strtab + shdr_p->sh_name, SCN_SHSTRTAB, sizeof(SCN_SHSTRTAB))) {
+		ERR_ENO(1, EBADMSG, "Invalid layout of ELF.");
+	}
+	shdr_p->sh_offset += inject_sig_len;
+
+	/**
+	 * Fill in the new section header entry in memory, and override
+	 * the whole section header table in the file.
+	 */
+	Elf64_Shdr *new_shdr = shdr + ehdr->e_shnum - 1;
+	new_shdr->sh_name = in_strtab_off;
+	new_shdr->sh_size = sig_len;
+	new_shdr->sh_addr = 0;
+	new_shdr->sh_addralign = 1;
+	new_shdr->sh_flags = SHF_OS_NONCONFORMING;
+	new_shdr->sh_type = SHT_PROGBITS;
+	new_shdr->sh_info = 0;
+	new_shdr->sh_link = 0;
+
+	n = file_rw(fd, ehdr->e_shoff, shdr,
+			sizeof(Elf64_Shdr) * (ehdr->e_shnum + 1), FILE_WRITE);
+	ERR_ENO(n < 0, EIO, "Failed to override section header table.");
+
+	/**
+	 * Update the ELF header about the info of section header table, and
+	 * override the ELF header in file.
+	 * The increased offset of the section header table include two parts:
+	 *     1. the new section's data
+	 *     2. the new section's name in string table section
+	 * 
+	 * Also, add some paddings to make section header table aligns at 
+	 * 8-byte address.
+	 */
+	ehdr->e_shstrndx += 1;
+	ehdr->e_shnum += 1;
+	ehdr->e_shoff += inject_sig_len;
+	ehdr->e_shoff += inject_strtab;
+	if (ehdr->e_shoff % 8) {
+		long padding = 8 - (ehdr->e_shoff % 8);
+		ehdr->e_shoff += padding;
+		inject_strtab += padding;
+	}
+
+	n = file_rw(fd, 0, ehdr, sizeof(Elf64_Ehdr), FILE_WRITE);
+	ERR_ENO(n < 0, EIO, "Failed to override ELF header.");
+
+	/**
+	 * Now the override of the file completes. Before starting to
+	 * inject the real raw data, close the file descriptor.
+	 * 
+	 * Inject the section's name string first, or the offset may be
+	 * influenced by the second call of file_modify().
+	 */
+	close(fd);
+	file_modify(file_name, scn_name_off,
+			section_name, inject_strtab, FILE_INJECT);
+	file_modify(file_name, new_shdr->sh_offset,
+			sig_buf, inject_sig_len, FILE_INJECT);
+
+	/**
+	 * Injection is successful, clean up the signature data file.
+	 * And clean up the memory.
+	 */
+	ERR_ENO(remove(section_name) < 0, ENOENT,
+			"Failed to remove %s", section_name);
+	printf(" --- Removing temp signature file: %s\n", section_name);
+
+	free(sig_buf);
+	free(strtab);
+	free(shdr);
+	free(ehdr);
+	sig_buf = NULL;
+	ehdr = NULL;
+	shdr = NULL;
+	strtab = NULL;
+}
+
+/**
  * Make a copy of unsigned ELF file for back up.
  * 
  * @elf_name: The ELF file name to be copied.
@@ -846,8 +1016,7 @@ int main(int argc, char **argv) {
 		dest_name = elf_name;
 	}
 	if (compact) {
-		insert_new_section(dest_name, SCN_TEXT_SIG);
-		printf("compact\n");
+		insert_new_section_compact(dest_name, SCN_TEXT_SIG);
 	} else {
 		insert_new_section(dest_name, SCN_TEXT_SIG);
 	}

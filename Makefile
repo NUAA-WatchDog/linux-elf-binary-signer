@@ -10,7 +10,7 @@ EXEC = $(ELF_SIGN) $(SIGN_TARGET)
 all: $(SRC)
 	cc -o $(ELF_SIGN) $(SRC_ELF_SIGN) -lcrypto
 	cc -o $(SIGN_TARGET) $(SRC_SIGN_TARGET)
-	./$(ELF_SIGN).signed $(ELF_SIGN) sha256 certs/kernel_key.pem certs/kernel_key.pem
+	./$(ELF_SIGN).signed sha256 certs/kernel_key.pem certs/kernel_key.pem $(ELF_SIGN)
 
 clean: 
 	$(RM) $(EXEC)
