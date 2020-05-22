@@ -98,16 +98,6 @@ struct elf_signature {
 
 #define PKEY_ID_PKCS7 2
 
-static __attribute__((noreturn))
-void format(void)
-{
-	fprintf(stderr,
-		"Usage: scripts/sign-file [-dp] <hash algo> <key> <x509> <module> [<dest>]\n");
-	fprintf(stderr,
-		"       scripts/sign-file -s <raw sig> <hash algo> <x509> <module> [<dest>]\n");
-	exit(2);
-}
-
 static void display_openssl_errors(int l)
 {
 	const char *file;
@@ -644,13 +634,6 @@ static void insert_new_section(char *file_name, char *section_name)
 	file_modify(file_name, new_shdr->sh_offset,
 			sig_buf, inject_sig_len, FILE_INJECT);
 
-	/*
-	int i = 0;
-	for (Elf64_Shdr *shdr_p = shdr; i < ehdr->e_shnum; shdr_p++, i++) {
-		printf("%02d %04ld %04ld %03d\n", i, shdr_p->sh_offset, shdr_p->sh_size, shdr_p->sh_name);
-	}
-	*/
-
 	/**
 	 * Injection is successful, clean up the signature data file.
 	 * Clean up the memory.
@@ -673,15 +656,22 @@ static void insert_new_section(char *file_name, char *section_name)
  * Make a copy of unsigned ELF file for back up.
  * 
  * @elf_name: The ELF file name to be copied.
+ * @dest_name: The destination file name, if NULL, will be <elf_name>.old.
  */
-static void elf_back_up(char *elf_name)
+static void elf_back_up(char *elf_name, char *dest_name)
 {
 	char backup_name[256];
 	strcpy(backup_name, elf_name);
 	strcat(backup_name, ".old");
 
-	int fd_backup = open(backup_name, O_WRONLY | O_CREAT, 0777);
+	int fd_backup = 0;
+	if (!dest_name) {
+		fd_backup = open(backup_name, O_WRONLY | O_CREAT, 0777);
+	} else {
+		fd_backup = open(dest_name, O_WRONLY | O_CREAT, 0777);
+	}
 	ERR_ENO(fd_backup < 0, EIO, "Failed to open back up file.");
+
 	int fd_origin = open(elf_name, O_RDONLY);
 	ERR_ENO(fd_origin < 0, EIO, "Failed to open origin file.");
 
@@ -695,27 +685,63 @@ static void elf_back_up(char *elf_name)
 }
 
 /**
+ * Printing the usage.
+ */
+static __attribute__((noreturn))
+void format(void)
+{
+	fprintf(stderr,
+		"Usage: elf-sign [-ch] <hash algo> <key> <x509> <elf-file> [<dest-file>]\n");
+	exit(2);
+}
+
+/**
  * 
  * The program entry point.
  * 
- * @argv[1]: The ELF file to be signed.
- * @argv[2]: The hash algorithm for making digest.
- * @argv[3]: The file containing private key.
- * @argv[4]: The file containing X.509.
- * @argv[5]: The destination file for storing signature.
- * 
  * @author Mr Dk.
  * @since 2020/04/20
- * @version 2020/05/17
+ * @version 2020/05/22
  * 
  */
 int main(int argc, char **argv) {
 
-	char *elf_name = argv[1];
-	char *hash_algo = argv[2];
-	char *private_key_name = argv[3];
-	char *x509_name = argv[4];
-	char *dest_name = argv[5];
+	int opt;
+	int compact = 0;
+	do {
+		opt = getopt(argc, argv, "ch");
+		switch (opt) {
+			case 'h':
+				format();
+				break;
+			case 'c':
+				compact = 1;
+				break;
+			case -1:
+				break;
+			default:
+				format();
+		}
+	} while (opt != -1);
+
+	argc -= optind;
+	argv += optind;
+	if (argc < 4 || argc > 5) {
+		format();
+	}
+
+	/**
+	 * @argv[0]: The hash algorithm for making digest.
+	 * @argv[1]: The file containing private key.
+	 * @argv[2]: The file containing X.509.
+	 * @argv[3]: The ELF file to be signed.
+	 * @argv[4]: The destination file for storing signature. (optional)
+	 */
+	char *hash_algo = argv[0];
+	char *private_key_name = argv[1];
+	char *x509_name = argv[2];
+	char *elf_name = argv[3];
+	char *dest_name = argv[4];
 
 	int fd = -1;
 	size_t n = 0;
@@ -811,12 +837,20 @@ int main(int argc, char **argv) {
 	/**
 	 * Make a copy of unsigned file.
 	 */
-	elf_back_up(elf_name);
+	elf_back_up(elf_name, dest_name);
 
 	/**
 	 * Add signature section into target ELF.
 	 */
-	insert_new_section(elf_name, SCN_TEXT_SIG);
+	if (!dest_name) {
+		dest_name = elf_name;
+	}
+	if (compact) {
+		insert_new_section(dest_name, SCN_TEXT_SIG);
+		printf("compact\n");
+	} else {
+		insert_new_section(dest_name, SCN_TEXT_SIG);
+	}
 
 	return 0;
 }
