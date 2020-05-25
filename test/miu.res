@@ -1,72 +1,72 @@
 -- ELF binary: ./cp
----- SV-time:  1261505
----- NO-SV-time:  158447
----- COST:  7.961684348709663
+---- SV-time:  874952
+---- NO-SV-time:  95129
+---- COST:  9.197531772645565
 -- ELF binary: ./df
----- SV-time:  1152305
----- NO-SV-time:  154812
----- COST:  7.443253752939048
+---- SV-time:  712626
+---- NO-SV-time:  92585
+---- COST:  7.696991953340174
 -- ELF binary: ./echo
----- SV-time:  936639
----- NO-SV-time:  152053
----- COST:  6.159950806626637
+---- SV-time:  504654
+---- NO-SV-time:  91527
+---- COST:  5.5137172637582355
 -- ELF binary: ./false
----- SV-time:  927373
----- NO-SV-time:  158547
----- COST:  5.849199291061956
+---- SV-time:  520817
+---- NO-SV-time:  89388
+---- COST:  5.826475589564595
 -- ELF binary: ./grep
----- SV-time:  1684663
----- NO-SV-time:  160636
----- COST:  10.487456111954979
+---- SV-time:  1281167
+---- NO-SV-time:  91124
+---- COST:  14.05960010535095
 -- ELF binary: ./kill
----- SV-time:  958988
----- NO-SV-time:  157186
----- COST:  6.100975913885461
+---- SV-time:  507889
+---- NO-SV-time:  92812
+---- COST:  5.472234193854243
 -- ELF binary: ./less
----- SV-time:  1337631
----- NO-SV-time:  159957
----- COST:  8.362441156060692
+---- SV-time:  906378
+---- NO-SV-time:  94524
+---- COST:  9.588866319664847
 -- ELF binary: ./ls
----- SV-time:  1259004
----- NO-SV-time:  161010
----- COST:  7.819414943171232
+---- SV-time:  819955
+---- NO-SV-time:  95247
+---- COST:  8.608722584438356
 -- ELF binary: ./mkdir
----- SV-time:  1074994
----- NO-SV-time:  165644
----- COST:  6.489785322740334
+---- SV-time:  682975
+---- NO-SV-time:  91880
+---- COST:  7.43333696125381
 -- ELF binary: ./mount
----- SV-time:  971204
----- NO-SV-time:  156554
----- COST:  6.203635806175505
+---- SV-time:  560726
+---- NO-SV-time:  95337
+---- COST:  5.881515046624081
 -- ELF binary: ./mv
----- SV-time:  1289950
----- NO-SV-time:  157520
----- COST:  8.189118842051803
+---- SV-time:  896924
+---- NO-SV-time:  94784
+---- COST:  9.462820729237002
 -- ELF binary: ./rm
----- SV-time:  992701
----- NO-SV-time:  155272
----- COST:  6.393303364418569
+---- SV-time:  602680
+---- NO-SV-time:  89731
+---- COST:  6.716519374575119
 -- ELF binary: ./rmdir
----- SV-time:  952877
----- NO-SV-time:  154708
----- COST:  6.1591966801975335
+---- SV-time:  591500
+---- NO-SV-time:  91418
+---- COST:  6.470279376052856
 -- ELF binary: ./tar
----- SV-time:  2194230
----- NO-SV-time:  159520
----- COST:  13.755203109327985
+---- SV-time:  1839052
+---- NO-SV-time:  92967
+---- COST:  19.781772026633107
 -- ELF binary: ./touch
----- SV-time:  1113110
----- NO-SV-time:  157790
----- COST:  7.054376069459408
+---- SV-time:  709995
+---- NO-SV-time:  91075
+---- COST:  7.795717814987648
 -- ELF binary: ./true
----- SV-time:  932773
----- NO-SV-time:  157624
----- COST:  5.917709232096635
+---- SV-time:  462741
+---- NO-SV-time:  90556
+---- COST:  5.109998233137506
 -- ELF binary: ./umount
----- SV-time:  911874
----- NO-SV-time:  161276
----- COST:  5.654120885934671
+---- SV-time:  594551
+---- NO-SV-time:  93937
+---- COST:  6.329252584178758
 -- ELF binary: ./uname
----- SV-time:  920178
----- NO-SV-time:  153657
----- COST:  5.988519885198852
+---- SV-time:  478937
+---- NO-SV-time:  91530
+---- COST:  5.2325685567573474
