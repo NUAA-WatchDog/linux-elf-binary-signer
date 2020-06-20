@@ -39,7 +39,7 @@ cc -o sign-target sign_target.c
  --- Little endian.
  --- 29 sections detected.
  --- Section 0014 [.text] detected.
- --- Length of section [.text]: 10192
+ --- Length of section [.text]: 8752
  --- Signature size of [.text]: 465
  --- Writing signature to file: .text_sig
  --- Removing temp signature file: .text_sig
@@ -66,8 +66,7 @@ The usage is as follow:
 
 ```bash
 $ ./elf-sign
-Usage: elf-sign [-ch] <hash-algo> <key> <x509> <elf-file> [<dest-file>]
-  -c,         compact signing mode for old ELF binary
+Usage: elf-sign [-h] <hash-algo> <key> <x509> <elf-file> [<dest-file>]
   -h,         display the help and exit
 
 Sign the <elf-file> to an optional <dest-file> with
@@ -98,8 +97,8 @@ Section Headers:
   [Nr] Name              Type             Address           Offset
        Size              EntSize          Flags  Link  Info  Align
 ...
-  [26] .text_sig         PROGBITS         0000000000000000  00001039
-       00000000000001dd  0000000000000000           0     0     1
+  [29] .text_sig         PROGBITS         0000000000000000  000020c0
+       00000000000001d1  0000000000000000   O       0     0     8
 ...
 ```
 
@@ -121,24 +120,6 @@ Contents of section .text_sig:
 ```
 
 It means that the tool works fine.
-
-## Sign an old ELF binary
-
-For an old ELF binary like [GNU core utilities](https://www.gnu.org/software/coreutils/), the layout of the ELF is different from modern ELF. To sign such an ELF, use the **compact** option. ATTENTION, to sign a modern ELF, the compact option is not recommended.
-
-```bash
-$ ./elf-sign -c sha256 certs/kernel_key.pem certs/kernel_key.pem /bin/ls signed-ls
- --- 64-bit ELF file, version 1 (CURRENT).
- --- Little endian.
- --- 28 sections detected.
- --- Section 0014 [.text] detected.
- --- Length of section [.text]: 74969
- --- Signature size of [.text]: 465
- --- Writing signature to file: .text_sig
- --- Removing temp signature file: .text_sig
-$ ./signed-ls
-...
-```
 
 ## Generate Private Key
 
@@ -179,7 +160,7 @@ writing new private key to 'kernel_key.pem'
 $ cd ..
 ```
 
-This is the file for signing a signature. Also, the file should be compiled with kernel to become a built-in key for signature verification.
+This is the file for signing a signature. Also, the file should be compiled with kernel as a built-in key for signature verification.
 
 ## License
 

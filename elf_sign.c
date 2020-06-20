@@ -4,21 +4,36 @@
  * 
  * Some source code is from Linux kernel source (script/sign-file.c)
  * 
- * The origin copyright is as follows. We modified this file originally
- * developed for kernel module signature to implement our ELF signature
- * function.
- * 
  * To compile this file, libssl should be installed. During compilation,
  * add "cc ... -lcrypto" to use the library.
  * 
  * @author Mr Dk.
  * @since 2020/04/20
- * @version 2020/05/18
+ * @version 2020/06/20
+ * 
+ * The original copyright is as follows. We modified this file originally
+ * developed for kernel module signature to implement our ELF signature
+ * function.
+ * 
+ * Sign a module file using the given key.
+ *
+ * Copyright © 2014-2016 Red Hat, Inc. All Rights Reserved.
+ * Copyright © 2015      Intel Corporation.
+ * Copyright © 2016      Hewlett Packard Enterprise Development LP
+ *
+ * Authors: David Howells <dhowells@redhat.com>
+ *          David Woodhouse <dwmw2@infradead.org>
+ *          Juerg Haefliger <juerg.haefliger@hpe.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * as published by the Free Software Foundation; either version 2.1
+ * of the licence, or (at your option) any later version.
  * 
  * ***********************************************************************/
 
 #include <unistd.h>
-#include <limit.h>
+#include <limits.h>
 #include <sys/types.h>
 #include <sys/stat.h>  
 #include <errno.h>
@@ -33,21 +48,6 @@
 
 char SIG_SUFFIX[] = "_sig";
 
-/* Sign a module file using the given key.
- *
- * Copyright © 2014-2016 Red Hat, Inc. All Rights Reserved.
- * Copyright © 2015      Intel Corporation.
- * Copyright © 2016      Hewlett Packard Enterprise Development LP
- *
- * Authors: David Howells <dhowells@redhat.com>
- *          David Woodhouse <dwmw2@infradead.org>
- *          Juerg Haefliger <juerg.haefliger@hpe.com>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public License
- * as published by the Free Software Foundation; either version 2.1
- * of the licence, or (at your option) any later version.
- */
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -244,8 +244,8 @@ static X509 *read_x509(const char *x509_name)
  * @version 2020/05/05
  */
 static void sign_section(void *segment_buf, size_t segment_len,
-	char *hash_algo, char *private_key_name, char *x509_name,
-	char *section_name)
+		char *hash_algo, char *private_key_name, char *x509_name,
+		char *section_name)
 {
 	struct elf_signature sig_info = { .id_type = PKEY_ID_PKCS7 };
 	unsigned long sig_size = 0;
@@ -340,6 +340,7 @@ static void sign_section(void *segment_buf, size_t segment_len,
  * 
  * @author Mr Dk.
  * @since 2020/05/17
+ * @version 2020/06/19
  */
 
 #define ERR_ENO(cond, errnum, fmt, ...)		\
@@ -450,7 +451,8 @@ static size_t file_modify(char *file_name, size_t pos,
 
 /**
  * Add a specific section to the specific ELF file.
- * The signature has already on the file system, e.g., ".text_sig".
+ * The signature data has already been saved on the
+ * file system, e.g., ".text_sig".
  * 
  * @file_name: The ELF file that will be appended a section.
  * @section_name: The name of the section being signed.
@@ -463,7 +465,7 @@ static void insert_new_section(char *file_name, char *section_name)
 	long origin_sh_off;
 
 	/**
-	 * Prepared for the signature in memory.
+	 * Load the signature into memory.
 	 */
 	struct stat statbuff;
 	ERR_ENO(stat(section_name, &statbuff) < 0, EIO, "Failed to read signature length.");
@@ -498,7 +500,7 @@ static void insert_new_section(char *file_name, char *section_name)
 	ERR_ENO(n < 0, EIO, "Failed to read section header.");
 
 	/**
-	 * Load data of ".shstrtab" section to get all sections' name.
+	 * Load ".shstrtab" section to get all sections' name.
 	 */
 	Elf64_Shdr *shdr_strtab = shdr + ehdr->e_shstrndx;
 	char *strtab = (char *) malloc(shdr_strtab->sh_size);
@@ -512,19 +514,19 @@ static void insert_new_section(char *file_name, char *section_name)
 	 * The address of insertion is aligned at 8-byte address.
 	 */
 	ERR_ENO(stat(file_name, &statbuff) < 0, EIO, "Failed to read ELF file length.");
-	size_t sig_off = statbuff.st_size;
-	if (delta = (sig_off % 8)) {
-		sig_off += (8 - delta);
+	size_t sig_insert_off = statbuff.st_size;
+	if (delta = (sig_insert_off % 8)) {
+		sig_insert_off += (8 - delta);
 	}
-	n = file_rw(fd, sig_off, sig_buf, sig_len, FILE_WRITE);
-	ERR_ENO(n < 0, EIO, "Failed to read section header.");
+	n = file_rw(fd, sig_insert_off, sig_buf, sig_len, FILE_WRITE);
+	ERR_ENO(n < 0, EIO, "Failed to insert signature data.");
 	
 	/**
 	 * Fill in the section header entry for signature section.
 	 */
 	Elf64_Shdr *new_shdr = shdr + ehdr->e_shnum;
 	memcpy(new_shdr, shdr_strtab, sizeof(Elf64_Shdr));
-	new_shdr->sh_offset = sig_off;
+	new_shdr->sh_offset = sig_insert_off;
 	new_shdr->sh_name = shdr_strtab->sh_size;
 	new_shdr->sh_size = sig_len;
 	new_shdr->sh_addr = 0;
@@ -545,7 +547,8 @@ static void insert_new_section(char *file_name, char *section_name)
 	 * 
 	 * By the way, find the max alignment of sections after
 	 * ".shstrtab". We want to maintain the same alignment of
-	 * these sections after inserting a string in ".shstrtab".
+	 * these sections after inserting a section name string
+	 * in ".shstrtab".
 	 */
 	Elf64_Shdr *shdr_p;
 	long min_off_after_strtab = LONG_MAX;
@@ -571,7 +574,8 @@ static void insert_new_section(char *file_name, char *section_name)
 	 * Calculate the padding between ".shstrtab" and the
 	 * following section to maintain the alignment.
 	 * 
-	 * e.g., the padding is 3 bytes:
+	 * e.g., the padding is 3 bytes to make the next section
+	 * aligned at 8-byte address:
 	 * <.shstrtab>
 	 * .. .. .. .. .. 00 00 00
 	 * <.next_section>
@@ -579,11 +583,12 @@ static void insert_new_section(char *file_name, char *section_name)
 	 * 
 	 * 
 	 * After inserting new section's string of 6 bytes,
-	 * we need another 2 bytes for padding:
+	 * we need another 2 bytes padding to make the next
+	 * section aligned at 8-byte address:
 	 * <.shstrtab>
 	 * .. .. .. .. .. xx  xx xx
 	 * xx xx xx 00 00 00 (00 00)
-	 * <.netxt_section>
+	 * <.next_section>
 	 * .. ..
 	 */
 	long name_insert_len = strlen(section_name) + 1;
@@ -639,16 +644,17 @@ static void insert_new_section(char *file_name, char *section_name)
 	ERR_ENO(n < 0, EIO, "Failed to override ELF header.");
 
 	/**
-	 * Now the override of the file completes. Before starting to
-	 * insert the real raw data, close the file descriptor.
+	 * Now the override of the file completed. Before starting to
+	 * insert the extra new data, close the file descriptor.
 	 */
 	close(fd);
 
 	/**
-	 * Insert the extra content into the file. Start insertion at the max
-	 * offset first, so that the insertion will not affect the following
+	 * Insert the extra content into the file. Insert at the max offset
+	 * first, so that the insertion will not affect the following
 	 * insertion's offset.
 	 * 
+	 * That is to say:
 	 * If section header table lays after ".shstrtab", then insert the new
 	 * entry into section header table first. Else, insert the section name
 	 * string first.
