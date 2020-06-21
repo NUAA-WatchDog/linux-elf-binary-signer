@@ -835,8 +835,8 @@ int main(int argc, char **argv) {
 	 * Iterate over sections to find the section being signed.
 	 * If a signature section is detected, throw an error.
 	 */
-	int i = 0;
-	for (Elf64_Shdr *shdr_p = shdr; i < ehdr->e_shnum; shdr_p++, i++) {
+	int i = ehdr->e_shnum - 1;
+	for (Elf64_Shdr *shdr_p = shdr + i; i >= 0; shdr_p--, i--) {
 		char *scn_name = strtab + shdr_p->sh_name;
 		if (!memcmp(scn_name, SCN_TEXT, sizeof(SCN_TEXT))) {
 			printf(" --- Section %-4.4d [%s] detected.\n", i, scn_name);

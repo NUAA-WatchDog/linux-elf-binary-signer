@@ -33,7 +33,6 @@ Then, build the tool by `make` command:
 ```bash
 $ make
 cc -o elf-sign elf_sign.c -lcrypto
-cc -o sign-target sign_target.c
 ./elf-sign.signed sha256 certs/kernel_key.pem certs/kernel_key.pem elf-sign
  --- 64-bit ELF file, version 1 (CURRENT).
  --- Little endian.
@@ -51,17 +50,6 @@ The `elf-sign.signed` ELF binary has already been signed by the private key in `
 >
 > If you just want to test the function with `certs/kernel_key.pem`, use the given `elf-sign.signed` to sign `elf-sign` after its building (which will be done automatically by `Makefile` on `make` command). The `elf-sign.signed` has been signed with keys in `certs/kernel_key.pem` and it can be directly executed on a kernel with signature verification to sign your `elf-sign`.
 
-The ELF file `sign-target` built from `sign_target.c` is a very simple C program, and it is only used for testing:
-
-```c
-#include <stdio.h>
-
-int main() {
-    printf("Hello world\n");
-    return 0;
-}
-```
-
 The usage is as follow:
 
 ```bash
@@ -77,7 +65,8 @@ and the digest algorithm specified by <hash-algo>. If no
 ```
 
 ```bash
-$ ./elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem sign-target
+$ ./elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem \
+    test/func/hello-gcc hello-gcc
  --- 64-bit ELF file, version 1 (CURRENT).
  --- Little endian.
  --- 29 sections detected.
@@ -88,10 +77,10 @@ $ ./elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem sign-target
  --- Removing temp signature file: .text_sig
 ```
 
-The program will back up the `sign-target` to `sign-target.old`, and generate a new signed `sign-target`. To check the result, use `readelf` or `objdump`:
+To check the result, use `readelf` or `objdump`:
 
 ```bash
-$ readelf -a sign-target
+$ readelf -a hello-gcc
 ...
 Section Headers:
   [Nr] Name              Type             Address           Offset
@@ -103,7 +92,7 @@ Section Headers:
 ```
 
 ```bash
-$ objdump -s sign-target
+$ objdump -s hello-gcc
 ...
 Contents of section .text_sig:
  0000 308201cd 06092a86 4886f70d 010702a0  0.....*.H.......
@@ -120,6 +109,35 @@ Contents of section .text_sig:
 ```
 
 It means that the tool works fine.
+
+## Test
+
+Directory `test/func/` contains simple ELF files **with different layout**. `hello-gcc` is built from a very simple C program from GCC compiler:
+
+```c
+#include <stdio.h>
+
+int main() {
+    printf("Hello world\n");
+    return 0;
+}
+```
+
+`hello-golang` is built from a very simple [Golang](https://golang.org/) program from Golang compiler:
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello world!")
+}
+```
+
+You can see the different layouts through `readelf -S`.
+
+The `elf-sign` program should support both of the layouts.
 
 ## Generate Private Key
 
