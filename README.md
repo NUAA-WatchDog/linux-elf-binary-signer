@@ -1,6 +1,6 @@
 # linux-elf-binary-signer
 
-🐧 Adding digital signature into an ELF binary.
+🐧 Adding digital signature into ELF binary files.
 
 Created by : Mr Dk.
 
@@ -10,25 +10,25 @@ Created by : Mr Dk.
 
 ## About
 
-It is tool for protecting the integrity of an ELF binary. It extracts the `.text` section of an ELF, and sign it with *RSA* private key. Finally, append the signature as another section.
+A tool for protecting integrity of ELF binary files. It extracts the `.text` section of an ELF, and digitally signs it with *RSA* key. Finally, the program appends the signature data as another section.
 
-For a [Linux kernel with signature verification](https://github.com/mrdrivingduck/linux-kernel-elf-sig-verify), during the process of `execve()` system call, it will extract the signed section and the signature section, and verify the integrity of the ELF binary. If it cannot pass the verification, the ELF will not be executed. The certificate for verification should be compiled with Linux kernel together.
+For a [Linux kernel with signature verification](https://github.com/mrdrivingduck/linux-kernel-elf-sig-verify), during the process of `execve()` system call, it will extract signed section and signature section, and verify the integrity of the ELF file. If it cannot pass the verification, the ELF will not be executed. The certificate for verification should be compiled with Linux kernel together.
 
-## Sign an ELF Binary
+## Build the Tool
 
-Firstly, install the dependencies:
+To build the program, install the dependencies firstly:
 
 ```bash
 $ sudo apt install libssl-dev openssl
 ```
 
-To check the result, you need:
+To check the result of signing, you also need following tools. But it is not necessary for the signing program.
 
 ```bash
 $ sudo apt install binutils
 ```
 
-Then, build the tool by `make` command:
+Then, build the tool through `make` command:
 
 ```bash
 $ make
@@ -44,13 +44,15 @@ cc -o elf-sign elf_sign.c -lcrypto
  --- Removing temp signature file: .text_sig
 ```
 
-The `elf-sign.signed` ELF binary has already been signed by the private key in `certs/kernel_key.pem`, so that it can pass OS's verification to sign the newly built `elf-sign`. Then, with a signed `elf-sign`, you can sign other ELF binary on our system.
+The `elf-sign.signed` ELF binary file has already been signed by the private key in `certs/kernel_key.pem`, so it can pass OS's verification to sign the newly built `elf-sign`. Then, with the signed `elf-sign`, you can sign other ELF binary files on your machine.
 
-> If you want to generate your own key, you will need to sign the `elf-sign` binary by your own key on a kernel **without** signature verification, because the newly compiled `elf-sign` has no signature section. After injecting signature section, it can be executed by a kernel **with** signature verification.
+> If you want to generate your own key, you will need to sign the `elf-sign` binary by your own key on a kernel **without** signature verification, because the newly built `elf-sign` has no signature section. After signing, a signature section will be inserted and then it can be executed by a kernel **with** signature verification.
 >
-> If you just want to test the function with `certs/kernel_key.pem`, use the given `elf-sign.signed` to sign `elf-sign` after its building (which will be done automatically by `Makefile` on `make` command). The `elf-sign.signed` has been signed with keys in `certs/kernel_key.pem` and it can be directly executed on a kernel with signature verification to sign your `elf-sign`.
+> If you just want to test the function, use the given `elf-sign.signed` to sign `elf-sign` after building (which will be done automatically by `Makefile` through `make` command). The `elf-sign.signed` has been signed with keys in `certs/kernel_key.pem` and it can be directly executed on a kernel with signature verification to sign your `elf-sign`.
 
-The usage is as follow:
+## Usage
+
+Show the helping information:
 
 ```bash
 $ ./elf-sign
@@ -63,6 +65,8 @@ and the digest algorithm specified by <hash-algo>. If no
 <dest-file> is specified, the <elf-file> will be backup to 
 <elf-file>.old, and the original <elf-file> will be signed.
 ```
+
+Sign an existing ELF file in repository:
 
 ```bash
 $ ./elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem \
@@ -77,7 +81,7 @@ $ ./elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem \
  --- Removing temp signature file: .text_sig
 ```
 
-To check the result, use `readelf` or `objdump`:
+To check the result, use `readelf` or `objdump` tool from `binutils`:
 
 ```bash
 $ readelf -a hello-gcc
@@ -108,11 +112,9 @@ Contents of section .text_sig:
 ...
 ```
 
-It means that the tool works fine.
-
 ## Test
 
-Directory `test/func/` contains simple ELF files **with different layout**. `hello-gcc` is built from a very simple C program from GCC compiler:
+Directory `test/func/` contains several simple ELF files **with different layout**. `hello-gcc` is built from a very simple C program from GCC compiler:
 
 ```c
 #include <stdio.h>
@@ -135,9 +137,7 @@ func main() {
 }
 ```
 
-You can see the different layouts through `readelf -S`.
-
-The `elf-sign` program should support both of the layouts.
+You can see the different layouts through `readelf -S`. The `elf-sign` program should support both of the layouts.
 
 ## Generate Private Key
 
