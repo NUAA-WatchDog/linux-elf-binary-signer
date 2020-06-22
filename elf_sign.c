@@ -497,7 +497,7 @@ static void insert_new_section(char *file_name, char *section_name)
 	Elf64_Shdr *shdr = (Elf64_Shdr *) malloc(ehdr->e_shentsize * (ehdr->e_shnum + 1));
 	ERR_ENO(!shdr, ENOMEM, "Failed to malloc for section header table.");
 	n = file_rw(fd, ehdr->e_shoff, shdr, ehdr->e_shentsize * ehdr->e_shnum, FILE_READ);
-	ERR_ENO(n < 0, EIO, "Failed to read section header.");
+	ERR_ENO(n < 0, EIO, "Failed to read section header table.");
 
 	/**
 	 * Load ".shstrtab" section to get all sections' name.
@@ -507,26 +507,23 @@ static void insert_new_section(char *file_name, char *section_name)
 	ERR_ENO(!strtab, ENOMEM, "Failed to malloc for section header string table.");
 	n = file_rw(fd, shdr_strtab->sh_offset, strtab, shdr_strtab->sh_size, FILE_READ);
 	ERR_ENO(n < 0, EIO, "Failed to read section header string table.");
-	origin_sh_off = ehdr->e_shoff;
 
 	/**
 	 * Insert the signature data at the end of the file.
 	 * The address of insertion is aligned at 8-byte address.
 	 */
 	ERR_ENO(stat(file_name, &statbuff) < 0, EIO, "Failed to read ELF file length.");
-	size_t sig_insert_off = statbuff.st_size;
-	if (delta = (sig_insert_off % 8)) {
-		sig_insert_off += (8 - delta);
+	size_t append_off = statbuff.st_size;
+	if (delta = (append_off % 8)) {
+		append_off += (8 - delta);
 	}
-	n = file_rw(fd, sig_insert_off, sig_buf, sig_len, FILE_WRITE);
-	ERR_ENO(n < 0, EIO, "Failed to insert signature data.");
 	
 	/**
 	 * Fill in the section header entry for signature section.
 	 */
 	Elf64_Shdr *new_shdr = shdr + ehdr->e_shnum;
 	memcpy(new_shdr, shdr_strtab, sizeof(Elf64_Shdr));
-	new_shdr->sh_offset = sig_insert_off;
+	new_shdr->sh_offset = append_off;
 	new_shdr->sh_name = shdr_strtab->sh_size;
 	new_shdr->sh_size = sig_len;
 	new_shdr->sh_addr = 0;
@@ -537,8 +534,12 @@ static void insert_new_section(char *file_name, char *section_name)
 	new_shdr->sh_link = 0;
 
 	/**
-	 * Update section header number in ELF header.
+	 * Append the signature data, update section header number in ELF header.
 	 */
+	n = file_rw(fd, append_off, sig_buf, sig_len, FILE_WRITE);
+	ERR_ENO(n < 0, EIO, "Failed to insert signature data.");
+	append_off += sig_len;
+
 	ehdr->e_shnum += 1;
 
 	/**
@@ -549,18 +550,56 @@ static void insert_new_section(char *file_name, char *section_name)
 	 * ".shstrtab". We want to maintain the same alignment of
 	 * these sections after inserting a section name string
 	 * in ".shstrtab".
+	 * 
+	 * If relocation is necessary, copy the structure to the end
+	 * of the file and try again.
 	 */
 	Elf64_Shdr *shdr_p;
-	long min_off_after_strtab = LONG_MAX;
-	long shdr_align_max = 8;
+
+	long min_off_after_strtab;
+	long shdr_align_max;
+
+retry:
+	min_off_after_strtab = LONG_MAX;
+	shdr_align_max = 8;
 	for (shdr_p = shdr; shdr_p < shdr + ehdr->e_shnum; shdr_p++) {
 		if (shdr_p->sh_offset > shdr_strtab->sh_offset) {
+			/**
+			 * Insert in ".shstrtab" will affect the layout.
+			 * Copy the section to the end of the file and retry.
+			 */
+			if (shdr_p->sh_flags & SHF_ALLOC != 0) {
+				if (delta = (append_off % 8)) {
+					append_off += (8 - delta);
+				}
+				shdr_strtab->sh_offset = append_off;
+				n = file_rw(fd, append_off, strtab, shdr_strtab->sh_size, FILE_WRITE);
+				ERR_ENO(n < 0, EIO, "Failed to copy .shstrtab data.");
+				append_off += shdr_strtab->sh_size;
+				goto retry;
+			}
+
 			if (shdr_p->sh_offset < min_off_after_strtab) {
 				min_off_after_strtab = shdr_p->sh_offset;
 			}
 			if (shdr_p->sh_addralign > shdr_align_max) {
 				shdr_align_max = shdr_p->sh_addralign;
 			}
+		}
+
+		/**
+		 * Insert in section header table will affect the layout.
+		 * Copy the table to the end of the file and retry.
+		 */
+		if (shdr_p->sh_offset > ehdr->e_shoff && (shdr_p->sh_flags & SHF_ALLOC != 0)) {
+			if (delta = (append_off % 8)) {
+				append_off += (8 - delta);
+			}
+			ehdr->e_shoff = append_off;
+			n = file_rw(fd, append_off, shdr, sizeof(Elf64_Shdr) * (ehdr->e_shnum - 1), FILE_WRITE);
+			ERR_ENO(n < 0, EIO, "Failed to copy section header table.");
+			append_off += sizeof(Elf64_Shdr) * (ehdr->e_shnum - 1);
+			goto retry;
 		}
 	}
 	if (ehdr->e_shoff > shdr_strtab->sh_offset && ehdr->e_shoff < min_off_after_strtab) {
@@ -625,6 +664,8 @@ static void insert_new_section(char *file_name, char *section_name)
 			shdr_p->sh_offset += name_insert_len;
 		}
 	}
+
+	origin_sh_off = ehdr->e_shoff;
 	if (ehdr->e_shoff > shdr_strtab->sh_offset) {
 		ehdr->e_shoff += name_insert_len;
 	}
