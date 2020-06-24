@@ -344,9 +344,9 @@ static void sign_section(void *segment_buf, size_t segment_len,
  */
 
 #define ERR_ENO(cond, errnum, fmt, ...)		\
-	if (cond) {								\
-		errno = errnum;						\
-		err(1, fmt, ## __VA_ARGS__);		\
+	if (cond) {				\
+		errno = errnum;			\
+		err(1, fmt, ## __VA_ARGS__);	\
 	}
 
 #define FILE_READ 0
