@@ -716,7 +716,7 @@ retry:
 	 */
 	ERR_ENO(remove(section_name) < 0, ENOENT,
 			"Failed to remove %s", section_name);
-	printf(" --- Removing temp signature file: %s\n", section_name);
+	printf(" --- Removing temporary signature file: %s\n", section_name);
 
 	free(sig_buf);
 	free(strtab);
@@ -766,8 +766,7 @@ static void elf_back_up(char *elf_name, char *dest_name)
 static __attribute__((noreturn))
 void format(void)
 {
-	fprintf(stderr,
-		"Usage: elf-sign [-h] <hash-algo> <key> <x509> <elf-file> [<dest-file>]\n");
+	fprintf(stderr, "Usage: elf-sign [-h] <hash-algo> <key> <x509> <elf-file> [<dest-file>]\n");
 	fprintf(stderr, "  -h,         display the help and exit\n");
 	fprintf(stderr, "\nSign the <elf-file> to an optional <dest-file> with\n");
 	fprintf(stderr, "private key in <key> and public key certificate in <x509>\n");
@@ -788,7 +787,7 @@ int main(int argc, char **argv) {
 
 	int opt;
 	do {
-		opt = getopt(argc, argv, "ch");
+		opt = getopt(argc, argv, "h");
 		switch (opt) {
 			case 'h':
 				format();
@@ -833,12 +832,9 @@ int main(int argc, char **argv) {
 	n = file_rw(fd, 0, ehdr, sizeof(Elf64_Ehdr), FILE_READ);
 	ERR_ENO(n < 0, EIO, "Failed to read ELF header.");
 
-	ERR_ENO(memcmp(ehdr->e_ident, ELFMAG, SELFMAG), EBADMSG,
-			"Invalid ELF file: %s", elf_name);
-	ERR_ENO(ehdr->e_ident[EI_VERSION] != EV_CURRENT, EBADMSG,
-			"Not support ELF version.");
-	ERR_ENO(ehdr->e_ident[EI_CLASS] != ELFCLASS64, EBADMSG,
-			"Not support byte long.");
+	ERR_ENO(memcmp(ehdr->e_ident, ELFMAG, SELFMAG), EBADMSG, "Invalid ELF file: %s", elf_name);
+	ERR_ENO(ehdr->e_ident[EI_VERSION] != EV_CURRENT, EBADMSG, "Not support ELF version.");
+	ERR_ENO(ehdr->e_ident[EI_CLASS] != ELFCLASS64, EBADMSG, "Not support byte long.");
 	printf(" --- 64-bit ELF file, version 1 (CURRENT).\n");
 
 	switch (ehdr->e_ident[EI_DATA]) {
@@ -858,18 +854,15 @@ int main(int argc, char **argv) {
 	/**
 	 * Prepared for section header table and string table section.
 	 */
-	Elf64_Shdr *shdr = (Elf64_Shdr *)
-			malloc(ehdr->e_shentsize * (ehdr->e_shnum));
+	Elf64_Shdr *shdr = (Elf64_Shdr *) malloc(ehdr->e_shentsize * (ehdr->e_shnum));
 	ERR_ENO(!shdr, EIO, "Failed to malloc ELF section header table.");
-	n = file_rw(fd, ehdr->e_shoff, shdr,
-			ehdr->e_shentsize * ehdr->e_shnum, FILE_READ);
+	n = file_rw(fd, ehdr->e_shoff, shdr, ehdr->e_shentsize * ehdr->e_shnum, FILE_READ);
 	ERR_ENO(n < 0, EIO, "Failed to read section header table.");
 
 	Elf64_Shdr *shdr_strtab = shdr + ehdr->e_shstrndx;
 	char *strtab = (char *) malloc(shdr_strtab->sh_size);
 	ERR_ENO(!strtab, EIO, "Failed to malloc for string table.");
-	n = file_rw(fd, shdr_strtab->sh_offset, strtab,
-			shdr_strtab->sh_size, FILE_READ);
+	n = file_rw(fd, shdr_strtab->sh_offset, strtab, shdr_strtab->sh_size, FILE_READ);
 	ERR_ENO(n < 0, EIO, "Failed to read string table.");
 
 	/**
@@ -887,8 +880,8 @@ int main(int argc, char **argv) {
 			ERR_ENO(!scn_data, ENOMEM, "Failed to malloc for data of section %s.", scn_name);
 			file_rw(fd, shdr_p->sh_offset, scn_data, shdr_p->sh_size, FILE_READ);
 
-			sign_section(scn_data, shdr_p->sh_size, hash_algo,
-					private_key_name, x509_name, scn_name);
+			sign_section(scn_data, shdr_p->sh_size,
+					hash_algo, private_key_name, x509_name, scn_name);
 
 			free(scn_data);
 			scn_data = NULL;

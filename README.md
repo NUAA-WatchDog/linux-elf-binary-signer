@@ -114,12 +114,15 @@ Contents of section .text_sig:
 
 ## Test
 
-Directory `test/func/` contains several simple ELF files **with different layout**. `hello-gcc` is built from a very simple C program from GCC compiler:
+Directory `test/func/` contains several simple ELF files **with different layout**, and we are happy to gather more files with different ELF layout.
+
+`hello-gcc` is built from a very simple C program from GCC compiler:
 
 ```c
 #include <stdio.h>
 
-int main() {
+int main()
+{
     printf("Hello world\n");
     return 0;
 }
