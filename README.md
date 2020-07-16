@@ -18,19 +18,19 @@ For a [Linux kernel with signature verification](https://github.com/mrdrivingduc
 
 To build the program, install the dependencies firstly:
 
-```bash
+```console
 $ sudo apt install libssl-dev openssl
 ```
 
 To check the result of signing, you also need following tools. But it is not necessary for the signing program.
 
-```bash
+```console
 $ sudo apt install binutils
 ```
 
 Then, build the tool through `make` command:
 
-```bash
+```console
 $ make
 cc -o elf-sign elf_sign.c -lcrypto
 ./elf-sign.signed sha256 certs/kernel_key.pem certs/kernel_key.pem elf-sign
@@ -38,10 +38,10 @@ cc -o elf-sign elf_sign.c -lcrypto
  --- Little endian.
  --- 29 sections detected.
  --- Section 0014 [.text] detected.
- --- Length of section [.text]: 8752
+ --- Length of section [.text]: 9200
  --- Signature size of [.text]: 465
  --- Writing signature to file: .text_sig
- --- Removing temp signature file: .text_sig
+ --- Removing temporary signature file: .text_sig
 ```
 
 The `elf-sign.signed` ELF binary file has already been signed by the private key in `certs/kernel_key.pem`, so it can pass OS's verification to sign the newly built `elf-sign`. Then, with the signed `elf-sign`, you can sign other ELF binary files on your machine.
@@ -54,7 +54,7 @@ The `elf-sign.signed` ELF binary file has already been signed by the private key
 
 Show the helping information:
 
-```bash
+```console
 $ ./elf-sign
 Usage: elf-sign [-h] <hash-algo> <key> <x509> <elf-file> [<dest-file>]
   -h,         display the help and exit
@@ -68,7 +68,7 @@ and the digest algorithm specified by <hash-algo>. If no
 
 Sign an existing ELF file in repository:
 
-```bash
+```console
 $ ./elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem \
     test/func/hello-gcc hello-gcc
  --- 64-bit ELF file, version 1 (CURRENT).
@@ -81,9 +81,9 @@ $ ./elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem \
  --- Removing temp signature file: .text_sig
 ```
 
-To check the result, use `readelf` or `objdump` tool from `binutils`:
+To check the result, use `readelf` or `objdump` tool from *binutils*:
 
-```bash
+```console
 $ readelf -a hello-gcc
 ...
 Section Headers:
@@ -95,7 +95,7 @@ Section Headers:
 ...
 ```
 
-```bash
+```console
 $ objdump -s hello-gcc
 ...
 Contents of section .text_sig:
@@ -140,7 +140,7 @@ func main() {
 }
 ```
 
-You can see the different layouts through `readelf -S`. The `elf-sign` program should support both of the layouts.
+You can see the different layouts through `readelf -S`. The `elf-sign` program should support both of the layouts. And we are looking for more different ELF layouts.
 
 ## Generate Private Key
 
@@ -168,7 +168,7 @@ authorityKeyIdentifier=keyid
 
 Then, generate the key through `openssl` command:
 
-```bash
+```console
 $ cd certs
 $ openssl req -new -nodes -utf8 -sha256 -days 36500 -batch -x509 \
     -config x509.genkey -outform PEM
@@ -182,6 +182,37 @@ $ cd ..
 ```
 
 This is the file for signing a signature. Also, the file should be compiled with kernel as a built-in key for signature verification.
+
+---
+
+## More
+
+This is the first program I've developed on [WSL](https://docs.microsoft.com/zh-cn/archive/blogs/wsl/) / [Ubuntu](https://www.microsoft.com/zh-cn/p/ubuntu-1804-lts/9n9tngvndl3q?activetab=pivot:overviewtab).
+
+```console
+$ neofetch
+            .-/+oossssoo+/-.               mrdrivingduck@ZJT-SURFACEBOOK2
+        `:+ssssssssssssssssss+:`           ------------------------------
+      -+ssssssssssssssssssyyssss+-         OS: Ubuntu 18.04.4 LTS on Windows 10 x86_64
+    .ossssssssssssssssssdMMMNysssso.       Kernel: 4.19.104-microsoft-standard
+   /ssssssssssshdmmNNmmyNMMMMhssssss/      Uptime: 16 mins
+  +ssssssssshmydMMMMMMMNddddyssssssss+     Packages: 585
+ /sssssssshNMMMyhhyyyyhmNMMMNhssssssss/    Shell: zsh 5.4.2
+.ssssssssdMMMNhsssssssssshNMMMdssssssss.   Terminal: /dev/pts/0
++sssshhhyNMMNyssssssssssssyNMMMysssssss+   CPU: Intel i7-8650U (8) @ 2.111GHz
+ossyNMMMNyMMhsssssssssssssshmmmhssssssso   Memory: 175MiB / 12723MiB
+ossyNMMMNyMMhsssssssssssssshmmmhssssssso
++sssshhhyNMMNyssssssssssssyNMMMysssssss+
+.ssssssssdMMMNhsssssssssshNMMMdssssssss.
+ /sssssssshNMMMyhhyyyyhdNMMMNhssssssss/
+  +sssssssssdmydMMMMMMMMddddyssssssss+
+   /ssssssssssshdmNNNNmyNMMMMhssssss/
+    .ossssssssssssssssssdMMMNysssso.
+      -+sssssssssssssssssyyyssss+-
+        `:+ssssssssssssssssss+:`
+            .-/+oossssoo+/-.
+
+```
 
 ## License
 
