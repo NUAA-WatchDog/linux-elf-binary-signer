@@ -187,7 +187,7 @@ This is the file for signing a signature. Also, the file should be compiled with
 
 ## More
 
-This is the first program I've developed on [WSL](https://docs.microsoft.com/zh-cn/archive/blogs/wsl/) / [Ubuntu](https://www.microsoft.com/zh-cn/p/ubuntu-1804-lts/9n9tngvndl3q?activetab=pivot:overviewtab).
+This is the first program I've developed on [WSL](https://docs.microsoft.com/zh-cn/archive/blogs/wsl/)/[Ubuntu](https://www.microsoft.com/zh-cn/p/ubuntu-1804-lts/9n9tngvndl3q?activetab=pivot:overviewtab). 😁
 
 ```console
 $ neofetch
