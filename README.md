@@ -12,7 +12,7 @@ Created by : Mr Dk.
 
 A tool for protecting integrity of ELF binary files. It extracts the `.text` section of an ELF, and digitally signs it with *RSA* key. Finally, the program appends the signature data as another section.
 
-For a [Linux kernel with signature verification](https://github.com/mrdrivingduck/linux-kernel-elf-sig-verify), during the process of `execve()` system call, it will extract signed section and signature section, and verify the integrity of the ELF file. If it cannot pass the verification, the ELF will not be executed. The certificate for verification should be compiled with Linux kernel together.
+For a [Linux kernel with signature verification module](https://github.com/NUAA-WatchDog/linux-kernel-elf-sig-verify-module), during the process of `execve()` system call, it will extract signed section and signature section, and verify the integrity of the ELF file. If it cannot pass the verification, the ELF will not be executed. The certificate for verification should be compiled with Linux kernel together.
 
 ## Build the Tool
 
@@ -182,37 +182,6 @@ $ cd ..
 ```
 
 This is the file for signing a signature. Also, the file should be compiled with kernel as a built-in key for signature verification.
-
----
-
-## More
-
-This is the first program I've developed on [WSL](https://docs.microsoft.com/zh-cn/archive/blogs/wsl/)/[Ubuntu](https://www.microsoft.com/zh-cn/p/ubuntu-1804-lts/9n9tngvndl3q?activetab=pivot:overviewtab). 😁
-
-```console
-$ neofetch
-            .-/+oossssoo+/-.               mrdrivingduck@ZJT-SURFACEBOOK2
-        `:+ssssssssssssssssss+:`           ------------------------------
-      -+ssssssssssssssssssyyssss+-         OS: Ubuntu 18.04.4 LTS on Windows 10 x86_64
-    .ossssssssssssssssssdMMMNysssso.       Kernel: 4.19.104-microsoft-standard
-   /ssssssssssshdmmNNmmyNMMMMhssssss/      Uptime: 16 mins
-  +ssssssssshmydMMMMMMMNddddyssssssss+     Packages: 585
- /sssssssshNMMMyhhyyyyhmNMMMNhssssssss/    Shell: zsh 5.4.2
-.ssssssssdMMMNhsssssssssshNMMMdssssssss.   Terminal: /dev/pts/0
-+sssshhhyNMMNyssssssssssssyNMMMysssssss+   CPU: Intel i7-8650U (8) @ 2.111GHz
-ossyNMMMNyMMhsssssssssssssshmmmhssssssso   Memory: 175MiB / 12723MiB
-ossyNMMMNyMMhsssssssssssssshmmmhssssssso
-+sssshhhyNMMNyssssssssssssyNMMMysssssss+
-.ssssssssdMMMNhsssssssssshNMMMdssssssss.
- /sssssssshNMMMyhhyyyyhdNMMMNhssssssss/
-  +sssssssssdmydMMMMMMMMddddyssssssss+
-   /ssssssssssshdmNNNNmyNMMMMhssssss/
-    .ossssssssssssssssssdMMMNysssso.
-      -+sssssssssssssssssyyyssss+-
-        `:+ssssssssssssssssss+:`
-            .-/+oossssoo+/-.
-
-```
 
 ## License
 
