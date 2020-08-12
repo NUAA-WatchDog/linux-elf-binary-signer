@@ -38,7 +38,7 @@ cc -o elf-sign elf_sign.c -lcrypto
  --- Little endian.
  --- 29 sections detected.
  --- Section 0014 [.text] detected.
- --- Length of section [.text]: 9200
+ --- Length of section [.text]: 9232
  --- Signature size of [.text]: 465
  --- Writing signature to file: .text_sig
  --- Removing temporary signature file: .text_sig
@@ -78,7 +78,7 @@ $ ./elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem \
  --- Length of section [.text]: 418
  --- Signature size of [.text]: 465
  --- Writing signature to file: .text_sig
- --- Removing temp signature file: .text_sig
+ --- Removing temporary signature file: .text_sig
 ```
 
 To check the result, use `readelf` or `objdump` tool from *binutils*:
@@ -142,7 +142,9 @@ func main() {
 
 You can see the different layouts through `readelf -S`. The `elf-sign` program should support both of the layouts. And we are looking for more different ELF layouts.
 
-## Generate Private Key
+## Generating Keys
+
+### Generating Keys By Yourself
 
 Firstly, configure some basic information of the key in `certs/x509.genkey`:
 
@@ -181,7 +183,11 @@ writing new private key to 'kernel_key.pem'
 $ cd ..
 ```
 
-This is the file for signing a signature. Also, the file should be compiled with kernel as a built-in key for signature verification.
+This is the file for signing a signature, containing not only private key but also public key certificate. Also, the file should be compiled with kernel as a built-in key for signature verification.
+
+### Generating Keys Through *Let's Encrypt*
+
+See the website of [*Let's Encrypt*](https://letsencrypt.org/) and use [*Certbot*](https://certbot.eff.org/) to generate private key and public key certificate.
 
 ## License
 

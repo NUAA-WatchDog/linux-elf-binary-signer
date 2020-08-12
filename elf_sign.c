@@ -9,7 +9,7 @@
  * 
  * @author Mr Dk.
  * @since 2020/04/20
- * @version 2020/06/20
+ * @version 2020/08/12
  * 
  * The original copyright is as follows. We modified this file originally
  * developed for kernel module signature to implement our ELF signature
@@ -40,13 +40,12 @@
 #include <fcntl.h>
 #include <elf.h>
 
-#define SCN_SYMTAB ".symtab"
-#define SCN_STRTAB ".strtab"
-#define SCN_SHSTRTAB ".shstrtab"
-#define SCN_TEXT ".text"
-#define SCN_TEXT_SIG ".text_sig"
+#define SCN_SIG_SUFFIX "_sig"
 
-char SIG_SUFFIX[] = "_sig";
+#define SCN_TEXT ".text"
+#define SCN_TEXT_SIG SCN_TEXT SCN_SIG_SUFFIX
+/* #define SCN_DATA ".data" */
+/* #define SCN_DATA_SIG SCN_DATA SCN_SIG_SUFFIX */
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -308,7 +307,7 @@ static void sign_section(void *segment_buf, size_t segment_len,
 
 	char new_sec_name[32];
 	strcpy(new_sec_name, section_name);
-	strcat(new_sec_name, SIG_SUFFIX);
+	strcat(new_sec_name, SCN_SIG_SUFFIX);
 
 	bd = BIO_new_file(new_sec_name, "wb");
 	// bd = BIO_new(BIO_s_mem());
@@ -781,7 +780,7 @@ void format(void)
  * 
  * @author Mr Dk.
  * @since 2020/04/20
- * @version 2020/06/20
+ * @version 2020/08/12
  */
 int main(int argc, char **argv) {
 
@@ -851,35 +850,38 @@ int main(int argc, char **argv) {
 
 	printf(" --- %d sections detected.\n", ehdr->e_shnum);
 
-	/**
-	 * Prepared for section header table and string table section.
-	 */
+	/* Prepared for section header table. */
 	Elf64_Shdr *shdr = (Elf64_Shdr *) malloc(ehdr->e_shentsize * (ehdr->e_shnum));
 	ERR_ENO(!shdr, EIO, "Failed to malloc ELF section header table.");
 	n = file_rw(fd, ehdr->e_shoff, shdr, ehdr->e_shentsize * ehdr->e_shnum, FILE_READ);
 	ERR_ENO(n < 0, EIO, "Failed to read section header table.");
 
+	/* Prepared for section header string table. */
 	Elf64_Shdr *shdr_strtab = shdr + ehdr->e_shstrndx;
 	char *strtab = (char *) malloc(shdr_strtab->sh_size);
 	ERR_ENO(!strtab, EIO, "Failed to malloc for string table.");
 	n = file_rw(fd, shdr_strtab->sh_offset, strtab, shdr_strtab->sh_size, FILE_READ);
 	ERR_ENO(n < 0, EIO, "Failed to read string table.");
 
-	/**
-	 * Iterate over sections to find the section being signed.
-	 * If a signature section is detected, throw an error.
-	 */
+	/* Iterate over sections to find the section to be signed. */
+	/* If a section has already been signed, throw an error. */
 	int i = ehdr->e_shnum - 1;
 	for (Elf64_Shdr *shdr_p = shdr + i; i >= 0; shdr_p--, i--) {
-		char *scn_name = strtab + shdr_p->sh_name;
+
+		char *scn_name = strtab + shdr_p->sh_name; /* Get the section name. */
+
+		/* The section to be signed detected. */
 		if (!memcmp(scn_name, SCN_TEXT, sizeof(SCN_TEXT))) {
+			/* .text detected. */
 			printf(" --- Section %-4.4d [%s] detected.\n", i, scn_name);
 			printf(" --- Length of section [%s]: %ld\n", scn_name, shdr_p->sh_size);
 
+			/* Read the section data. */
 			char *scn_data = (char *) malloc(shdr_p->sh_size);
 			ERR_ENO(!scn_data, ENOMEM, "Failed to malloc for data of section %s.", scn_name);
 			file_rw(fd, shdr_p->sh_offset, scn_data, shdr_p->sh_size, FILE_READ);
 
+			/* Sign the section data. */
 			sign_section(scn_data, shdr_p->sh_size,
 					hash_algo, private_key_name, x509_name, scn_name);
 
@@ -887,6 +889,7 @@ int main(int argc, char **argv) {
 			scn_data = NULL;
 
 		} else if (!memcmp(scn_name, SCN_TEXT_SIG, sizeof(SCN_TEXT_SIG))) {
+			/* The detected section has already been signed, exit! */
 			ERR_ENO(1, EBADMSG, "File already been signed with section: [%s]", scn_name);
 		}
 	}
@@ -899,19 +902,16 @@ int main(int argc, char **argv) {
 	shdr = NULL;
 	strtab = NULL;
 
-	/**
-	 * Make a copy of unsigned file.
-	 */
+	/* Make a copy of unsigned file. */
 	elf_back_up(elf_name, dest_name);
 
-	/**
-	 * Add signature section into target ELF.
-	 */
+	/* If no destination file name provided, then modify the original file. */
 	if (!dest_name) {
 		dest_name = elf_name;
 	}
-	
-	insert_new_section(dest_name, SCN_TEXT_SIG);
+
+	/* Add signature section into target ELF. */
+	insert_new_section(dest_name, SCN_TEXT_SIG); /* .text_sig */
 
 	return 0;
 }
