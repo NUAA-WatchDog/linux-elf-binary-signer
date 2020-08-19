@@ -12,7 +12,7 @@ Created by : Mr Dk.
 
 A tool for protecting integrity of ELF binary files. It extracts the `.text` section of an ELF, and digitally signs it with *RSA* key. Finally, the program appends the signature data as another section.
 
-For a [Linux kernel with signature verification module](https://github.com/NUAA-WatchDog/linux-kernel-elf-sig-verify-module), during the process of `execve()` system call, it will extract signed section and signature section, and verify the integrity of the ELF file. If it cannot pass the verification, the ELF will not be executed. The certificate for verification should be compiled with Linux kernel together.
+For a [Linux kernel with signature verification module](https://github.com/NUAA-WatchDog/linux-kernel-elf-sig-verify-module), during the process of `execve()` system call, it will extract signed section and signature section, and verify the integrity of the ELF file. If it cannot pass the verification, the ELF will not be executed. The public key certificate for verification should be compiled with Linux kernel together.
 
 ## Build the Tool
 
@@ -142,9 +142,9 @@ func main() {
 
 You can see the different layouts through `readelf -S`. The `elf-sign` program should support both of the layouts. And we are looking for more different ELF layouts.
 
-## Generating Keys
+## Generate Keys
 
-### Generating Keys By Yourself
+### Generate Keys By Yourself
 
 Firstly, configure some basic information of the key in `certs/x509.genkey`:
 
@@ -185,9 +185,19 @@ $ cd ..
 
 This is the file for signing a signature, containing not only private key but also public key certificate. Also, the file should be compiled with kernel as a built-in key for signature verification.
 
-### Generating Keys Through *Let's Encrypt*
+### Generate Keys Through *Let's Encrypt*
 
 See the website of [*Let's Encrypt*](https://letsencrypt.org/) and use [*Certbot*](https://certbot.eff.org/) to generate private key and public key certificate.
+
+---
+
+## Contributors
+
+<a href="https://github.com/NUAA-WatchDog/linux-elf-binary-signer/graphs/contributors">
+  <img src="https://contributors-img.web.app/image?repo=NUAA-WatchDog/linux-elf-binary-signer" />
+</a>
+
+Made with [contributors-img](https://contributors-img.web.app).
 
 ## License
 
