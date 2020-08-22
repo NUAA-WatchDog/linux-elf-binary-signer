@@ -34,11 +34,12 @@ Then, build the tool through `make` command:
 $ make
 cc -o elf-sign elf_sign.c -lcrypto
 ./elf-sign.signed sha256 certs/kernel_key.pem certs/kernel_key.pem elf-sign
- --- 64-bit ELF file, version 1 (CURRENT).
- --- Little endian.
+ --- 64-bit ELF file, version 1 (CURRENT), little endian.
  --- 29 sections detected.
+ --- [Library dependency]: libcrypto.so.1.1
+ --- [Library dependency]: libc.so.6
  --- Section 0014 [.text] detected.
- --- Length of section [.text]: 9232
+ --- Length of section [.text]: 9968
  --- Signature size of [.text]: 465
  --- Writing signature to file: .text_sig
  --- Removing temporary signature file: .text_sig
@@ -71,9 +72,9 @@ Sign an existing ELF file in repository:
 ```console
 $ ./elf-sign sha256 certs/kernel_key.pem certs/kernel_key.pem \
     test/func/hello-gcc hello-gcc
- --- 64-bit ELF file, version 1 (CURRENT).
- --- Little endian.
+ --- 64-bit ELF file, version 1 (CURRENT), little endian.
  --- 29 sections detected.
+ --- [Library dependency]: libc.so.6
  --- Section 0014 [.text] detected.
  --- Length of section [.text]: 418
  --- Signature size of [.text]: 465

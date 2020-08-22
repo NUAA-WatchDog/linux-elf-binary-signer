@@ -836,14 +836,14 @@ int main(int argc, char **argv) {
 	ERR_ENO(memcmp(ehdr->e_ident, ELFMAG, SELFMAG), EBADMSG, "Invalid ELF file: %s", elf_name);
 	ERR_ENO(ehdr->e_ident[EI_VERSION] != EV_CURRENT, EBADMSG, "Not support ELF version.");
 	ERR_ENO(ehdr->e_ident[EI_CLASS] != ELFCLASS64, EBADMSG, "Not support byte long.");
-	printf(" --- 64-bit ELF file, version 1 (CURRENT).\n");
+	printf(" --- 64-bit ELF file, version 1 (CURRENT), ");
 
 	switch (ehdr->e_ident[EI_DATA]) {
 		case ELFDATA2MSB:
-			printf(" --- Big endian.\n");
+			printf("big endian.\n");
 			break;
 		case ELFDATA2LSB:
-			printf(" --- Little endian.\n");
+			printf("little endian.\n");
 			break;
 		default:
 			ERR_ENO(1, EBADMSG, "Not support data encoding.");
