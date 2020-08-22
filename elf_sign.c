@@ -9,7 +9,7 @@
  * 
  * @author Mr Dk.
  * @since 2020/04/20
- * @version 2020/08/12
+ * @version 2020/08/22
  * 
  * The original copyright is as follows. We modified this file originally
  * developed for kernel module signature to implement our ELF signature
@@ -43,9 +43,11 @@
 #define SCN_SIG_SUFFIX "_sig"
 
 #define SCN_TEXT ".text"
-#define SCN_TEXT_SIG SCN_TEXT SCN_SIG_SUFFIX
+#define SCN_TEXT_SIG SCN_TEXT SCN_SIG_SUFFIX /* .text_sig */
 /* #define SCN_DATA ".data" */
 /* #define SCN_DATA_SIG SCN_DATA SCN_SIG_SUFFIX */
+#define SCN_DYN ".dynamic"
+#define SCN_DYNSTR ".dynstr"
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -863,12 +865,70 @@ int main(int argc, char **argv) {
 	n = file_rw(fd, shdr_strtab->sh_offset, strtab, shdr_strtab->sh_size, FILE_READ);
 	ERR_ENO(n < 0, EIO, "Failed to read string table.");
 
-	/* Iterate over sections to find the section to be signed. */
-	/* If a section has already been signed, throw an error. */
-	int i = ehdr->e_shnum - 1;
-	for (Elf64_Shdr *shdr_p = shdr + i; i >= 0; shdr_p--, i--) {
+	char *dynstrtab = NULL;
+	Elf64_Shdr *shdr_p = NULL;
 
-		char *scn_name = strtab + shdr_p->sh_name; /* Get the section name. */
+	/* If a section has already been signed, throw an error. */
+	/* Iterate from the end. */
+	int i = ehdr->e_shnum - 1;
+	for (shdr_p = shdr + i; i >= 0; shdr_p--, i--) {
+		/* Get the section name. */
+		char *scn_name = strtab + shdr_p->sh_name; 
+
+		/**
+		 * 1. If ".text_sig" found, then the detected section has already been
+		 *    signed, exit!
+		 * 2. If ".dynstr" found, read in out from the file.
+		 */
+		if (!memcmp(scn_name, SCN_TEXT_SIG, sizeof(SCN_TEXT_SIG))) {
+			ERR_ENO(1, ENOEXEC, "File already been signed with section: [%s]", scn_name);
+		} else if (!memcmp(scn_name, SCN_DYNSTR, sizeof(SCN_DYNSTR))) {
+			dynstrtab = (char *) malloc(shdr_p->sh_size);
+			ERR_ENO(!dynstrtab, ENOMEM, "Failed to malloc for data of section %s.", scn_name);
+			file_rw(fd, shdr_p->sh_offset, dynstrtab, shdr_p->sh_size, FILE_READ);
+		}
+	}
+
+	/* Find dynamic linking dependencies. */
+	if (dynstrtab) {
+		for (shdr_p = shdr, i = 0; i < ehdr->e_shnum; shdr_p++, i++) {
+			/* Get the section name. */
+			char *scn_name = strtab + shdr_p->sh_name;
+
+			/**
+			 * If ".dynamic" found, then read in out and iterate over it
+			 * to find the shared library dependencies.
+			 */
+			if (!memcmp(scn_name, SCN_DYN, sizeof(SCN_DYN))) {
+				/* Dynamic array. */
+				Elf64_Dyn *scn_data = (Elf64_Dyn *) malloc(shdr_p->sh_size);
+				ERR_ENO(!scn_data, ENOMEM, "Failed to malloc for data of section %s.", scn_name);
+				file_rw(fd, shdr_p->sh_offset, scn_data, shdr_p->sh_size, FILE_READ);
+
+				for (Elf64_Dyn *dyn_str = scn_data;
+						dyn_str < scn_data + shdr_p->sh_size; dyn_str++) {
+					if (dyn_str->d_tag == DT_NEEDED) {
+						printf(" --- [Library dependency]: %s\n",
+								dynstrtab + dyn_str->d_un.d_val);
+					} else if (dyn_str->d_tag == DT_RPATH) {
+						printf(" --- [Library path]: %s\n",
+								dynstrtab + dyn_str->d_un.d_val);
+					}
+				}
+
+				free(scn_data);
+				scn_data = NULL;
+			}
+		}
+
+		free(dynstrtab);
+		dynstrtab = NULL;
+	}
+
+	/* Iterate over sections to find the section to be signed. */
+	for (shdr_p = shdr, i = 0; i < ehdr->e_shnum; shdr_p++, i++) {
+		/* Get the section name. */
+		char *scn_name = strtab + shdr_p->sh_name;
 
 		/* The section to be signed detected. */
 		if (!memcmp(scn_name, SCN_TEXT, sizeof(SCN_TEXT))) {
@@ -881,16 +941,12 @@ int main(int argc, char **argv) {
 			ERR_ENO(!scn_data, ENOMEM, "Failed to malloc for data of section %s.", scn_name);
 			file_rw(fd, shdr_p->sh_offset, scn_data, shdr_p->sh_size, FILE_READ);
 
-			/* Sign the section data. */
+			/* Sign the section data to a temporary file. */
 			sign_section(scn_data, shdr_p->sh_size,
 					hash_algo, private_key_name, x509_name, scn_name);
 
 			free(scn_data);
 			scn_data = NULL;
-
-		} else if (!memcmp(scn_name, SCN_TEXT_SIG, sizeof(SCN_TEXT_SIG))) {
-			/* The detected section has already been signed, exit! */
-			ERR_ENO(1, EBADMSG, "File already been signed with section: [%s]", scn_name);
 		}
 	}
 
