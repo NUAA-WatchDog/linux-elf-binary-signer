@@ -782,7 +782,7 @@ void format(void)
  * 
  * @author Mr Dk.
  * @since 2020/04/20
- * @version 2020/08/12
+ * @version 2020/08/24
  */
 int main(int argc, char **argv) {
 
@@ -905,15 +905,15 @@ int main(int argc, char **argv) {
 				ERR_ENO(!scn_data, ENOMEM, "Failed to malloc for data of section %s.", scn_name);
 				file_rw(fd, shdr_p->sh_offset, scn_data, shdr_p->sh_size, FILE_READ);
 
-				for (Elf64_Dyn *dyn_str = scn_data;
-						dyn_str < scn_data + shdr_p->sh_size; dyn_str++) {
-					if (dyn_str->d_tag == DT_NEEDED) {
+				for (Elf64_Dyn *dyn_ptr = scn_data;
+						dyn_ptr < scn_data + shdr_p->sh_size; dyn_ptr++) {
+					if (dyn_ptr->d_tag == DT_NEEDED) {
 						printf(" --- [Library dependency]: %s\n",
-								dynstrtab + dyn_str->d_un.d_val);
-					} else if (dyn_str->d_tag == DT_RPATH) {
+								dynstrtab + dyn_ptr->d_un.d_val);
+					} /* else if (dyn_ptr->d_tag == DT_RPATH) {
 						printf(" --- [Library path]: %s\n",
-								dynstrtab + dyn_str->d_un.d_val);
-					}
+								dynstrtab + dyn_ptr->d_un.d_val);
+					} */
 				}
 
 				free(scn_data);

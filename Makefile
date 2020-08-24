@@ -13,5 +13,6 @@ clean:
 	$(RM) $(EXEC)
 	$(RM) .*_sig
 	$(RM) *.old
+	$(RM) *.so
 	$(RM) -r test/prev/prev_test
 	$(RM) hello-*
