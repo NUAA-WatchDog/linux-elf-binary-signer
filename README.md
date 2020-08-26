@@ -39,7 +39,7 @@ cc -o elf-sign elf_sign.c -lcrypto
  --- [Library dependency]: libcrypto.so.1.1
  --- [Library dependency]: libc.so.6
  --- Section 0014 [.text] detected.
- --- Length of section [.text]: 9968
+ --- Length of section [.text]: 10223
  --- Signature size of [.text]: 465
  --- Writing signature to file: .text_sig
  --- Removing temporary signature file: .text_sig

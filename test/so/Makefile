@@ -6,4 +6,4 @@ lib: test.c
 clean: 
 	$(RM) so-test
 	$(RM) *.so
-	$(RM) *.so.old
+	$(RM) *.old

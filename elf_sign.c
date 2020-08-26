@@ -9,7 +9,7 @@
  * 
  * @author Mr Dk.
  * @since 2020/04/20
- * @version 2020/08/22
+ * @version 2020/08/26
  * 
  * The original copyright is as follows. We modified this file originally
  * developed for kernel module signature to implement our ELF signature
@@ -341,7 +341,7 @@ static void sign_section(void *segment_buf, size_t segment_len,
  * 
  * @author Mr Dk.
  * @since 2020/05/17
- * @version 2020/06/19
+ * @version 2020/08/26
  */
 
 #define ERR_ENO(cond, errnum, fmt, ...)		\
@@ -365,10 +365,10 @@ static void sign_section(void *segment_buf, size_t segment_len,
  * @len: The size in bytes to read or write.
  * @flag: Only FILE_READ or FILE_WRITE in valid.
  */
-static size_t file_rw(int fd, long off, void *buf, size_t len, int flag)
+static inline size_t file_rw(int fd, long off, void *buf, size_t len, int flag)
 {
 	size_t n = lseek(fd, off, SEEK_SET);
-	ERR_ENO(n < 0, EIO, "Failed to seek section header.");
+	ERR_ENO(n < 0, errno, "Failed to seek section header");
 
 	return flag == FILE_WRITE ? write(fd, buf, len) :
 			(flag == FILE_READ ? read(fd, buf, len) : -1);
@@ -384,17 +384,21 @@ static size_t file_rw(int fd, long off, void *buf, size_t len, int flag)
  * @len: The size in bytes to insert or wipe.
  * @flag: Only FILE_INSERT or FILE_WIPE in valid.
  */
-static size_t file_modify(char *file_name, size_t pos,
+static inline size_t file_modify(char *file_name, size_t pos,
 		char *content, size_t len, int flag)
 {
 	char tmp_file_name[256];
 	strcpy(tmp_file_name, file_name);
 	strcat(tmp_file_name, ".tmp");
 
-	int fd_tmp = open(tmp_file_name, O_WRONLY | O_CREAT, 0777);
-	ERR_ENO(fd_tmp < 0, EIO, "Failed to open file: %s", tmp_file_name);
 	int fd_origin = open(file_name, O_RDONLY);
-	ERR_ENO(fd_origin < 0, EIO, "Failed to open file: %s", file_name);
+	ERR_ENO(fd_origin < 0, errno, "Failed to open file: %s", file_name);
+
+	struct stat st;
+	ERR_ENO(fstat(fd_origin, &st), errno, "Failed to get status of original file");
+
+	int fd_tmp = open(tmp_file_name, O_WRONLY | O_CREAT, st.st_mode);
+	ERR_ENO(fd_tmp < 0, errno, "Failed to open file: %s", tmp_file_name);
 
 	size_t off = 0;
 	size_t n = 0;
@@ -410,31 +414,31 @@ static size_t file_modify(char *file_name, size_t pos,
 		} else {
 			n = read(fd_origin, buffer, sizeof(buffer));
 		}
-		ERR_ENO(n < 0, EIO, "Failed to read original ELF.");
+		ERR_ENO(n < 0, errno, "Failed to read original ELF");
 		off += n;
 		n = write(fd_tmp, buffer, n);
-		ERR_ENO(n < 0, EIO, "Failed to write tmp ELF.");
+		ERR_ENO(n < 0, errno, "Failed to write tmp ELF");
 	}
 
 	if (flag == FILE_INSERT) {
 		/* Insert the additional content. */
 		n = write(fd_tmp, content, len);
-		ERR_ENO(n < 0, EIO, "Failed to insert tmp ELF.");
+		ERR_ENO(n < 0, errno, "Failed to insert tmp ELF");
 		off += len;
 	} else if (flag == FILE_WIPE) {
 		/* Ignore len bytes in original file. */
 		n = lseek(fd_origin, len, SEEK_CUR);
-		ERR_ENO(n < 0, EIO, "Failed to ignore original ELF.");
+		ERR_ENO(n < 0, errno, "Failed to ignore original ELF");
 	}
 
 	/**
 	 * Copy the rest.
 	 */
 	while (n = read(fd_origin, buffer, sizeof(buffer))) {
-		ERR_ENO(n < 0, EIO, "Failed to read original ELF.");
+		ERR_ENO(n < 0, errno, "Failed to read original ELF");
 		off += n;
 		n = write(fd_tmp, buffer, n);
-		ERR_ENO(n < 0, EIO, "Failed to write tmp ELF.");
+		ERR_ENO(n < 0, errno, "Failed to write tmp ELF");
 	}
 
 	close(fd_origin);
@@ -444,8 +448,8 @@ static size_t file_modify(char *file_name, size_t pos,
 	 * Remove the original file, rename the temporary file
 	 * to the original file.
 	 */
-	ERR_ENO(remove(file_name) < 0, ENOENT, "Failed to remove original file.");
-	ERR_ENO(rename(tmp_file_name, file_name) < 0, ENOENT, "Failed to rename original file.");
+	ERR_ENO(remove(file_name) < 0, ENOENT, "Failed to remove original file");
+	ERR_ENO(rename(tmp_file_name, file_name) < 0, ENOENT, "Failed to rename original file");
 
 	return off;
 }
@@ -468,15 +472,15 @@ static void insert_new_section(char *file_name, char *section_name)
 	/**
 	 * Load the signature into memory.
 	 */
+	fd = open(section_name, O_RDONLY);
+	ERR_ENO(fd < 0, errno, "Failed to open file");
+
 	struct stat statbuff;
-	ERR_ENO(stat(section_name, &statbuff) < 0, EIO, "Failed to read signature length.");
+	ERR_ENO(fstat(fd, &statbuff) < 0, errno, "Failed to read signature length");
 	size_t sig_len = statbuff.st_size;
 
 	char *sig_buf = (char *) malloc(sig_len);
-	ERR_ENO(!sig_buf, ENOMEM, "Failed to malloc for signature data.");
-
-	fd = open(section_name, O_RDONLY);
-	ERR_ENO(fd < 0, EIO, "Failed to open file.");
+	ERR_ENO(!sig_buf, ENOMEM, "Failed to malloc for signature data");
 	sig_len = read(fd, sig_buf, sig_len);
 	close(fd);
 
@@ -485,35 +489,35 @@ static void insert_new_section(char *file_name, char *section_name)
 	 * At first, load ELF Header into memory.
 	 */
 	fd = open(file_name, O_RDWR);
-	ERR_ENO(fd < 0, EIO, "Failed to open file.");
+	ERR_ENO(fd < 0, errno, "Failed to open file");
 	Elf64_Ehdr *ehdr = (Elf64_Ehdr *) malloc(sizeof(Elf64_Ehdr));
-	ERR_ENO(!ehdr, ENOMEM, "Failed to malloc ELF header.");
+	ERR_ENO(!ehdr, ENOMEM, "Failed to malloc ELF header");
 	n = file_rw(fd, 0, ehdr, sizeof(Elf64_Ehdr), FILE_READ);
-	ERR_ENO(n < 0, EIO, "Failed to read ELF header.");
+	ERR_ENO(n < 0, errno, "Failed to read ELF header");
 
 	/**
 	 * Load section header table into memory. Especially, allocate
 	 * ONE MORE ROOM for the new section header table entry.
 	 */
 	Elf64_Shdr *shdr = (Elf64_Shdr *) malloc(ehdr->e_shentsize * (ehdr->e_shnum + 1));
-	ERR_ENO(!shdr, ENOMEM, "Failed to malloc for section header table.");
+	ERR_ENO(!shdr, ENOMEM, "Failed to malloc for section header table");
 	n = file_rw(fd, ehdr->e_shoff, shdr, ehdr->e_shentsize * ehdr->e_shnum, FILE_READ);
-	ERR_ENO(n < 0, EIO, "Failed to read section header table.");
+	ERR_ENO(n < 0, errno, "Failed to read section header table");
 
 	/**
 	 * Load ".shstrtab" section to get all sections' name.
 	 */
 	Elf64_Shdr *shdr_strtab = shdr + ehdr->e_shstrndx;
 	char *strtab = (char *) malloc(shdr_strtab->sh_size);
-	ERR_ENO(!strtab, ENOMEM, "Failed to malloc for section header string table.");
+	ERR_ENO(!strtab, ENOMEM, "Failed to malloc for section header string table");
 	n = file_rw(fd, shdr_strtab->sh_offset, strtab, shdr_strtab->sh_size, FILE_READ);
-	ERR_ENO(n < 0, EIO, "Failed to read section header string table.");
+	ERR_ENO(n < 0, errno, "Failed to read section header string table");
 
 	/**
 	 * Insert the signature data at the end of the file.
 	 * The address of insertion is aligned at 8-byte address.
 	 */
-	ERR_ENO(stat(file_name, &statbuff) < 0, EIO, "Failed to read ELF file length.");
+	ERR_ENO(fstat(fd, &statbuff) < 0, errno, "Failed to read ELF file length");
 	size_t append_off = statbuff.st_size;
 	if (delta = (append_off % 8)) {
 		append_off += (8 - delta);
@@ -538,7 +542,7 @@ static void insert_new_section(char *file_name, char *section_name)
 	 * Append the signature data, update section header number in ELF header.
 	 */
 	n = file_rw(fd, append_off, sig_buf, sig_len, FILE_WRITE);
-	ERR_ENO(n < 0, EIO, "Failed to insert signature data.");
+	ERR_ENO(n < 0, errno, "Failed to insert signature data");
 	append_off += sig_len;
 
 	ehdr->e_shnum += 1;
@@ -575,7 +579,7 @@ retry:
 				}
 				shdr_strtab->sh_offset = append_off;
 				n = file_rw(fd, append_off, strtab, shdr_strtab->sh_size, FILE_WRITE);
-				ERR_ENO(n < 0, EIO, "Failed to copy .shstrtab data.");
+				ERR_ENO(n < 0, errno, "Failed to copy .shstrtab data");
 				append_off += shdr_strtab->sh_size;
 				goto retry;
 			}
@@ -598,7 +602,7 @@ retry:
 			}
 			ehdr->e_shoff = append_off;
 			n = file_rw(fd, append_off, shdr, sizeof(Elf64_Shdr) * (ehdr->e_shnum - 1), FILE_WRITE);
-			ERR_ENO(n < 0, EIO, "Failed to copy section header table.");
+			ERR_ENO(n < 0, errno, "Failed to copy section header table");
 			append_off += sizeof(Elf64_Shdr) * (ehdr->e_shnum - 1);
 			goto retry;
 		}
@@ -676,14 +680,14 @@ retry:
 	 * (without the new section header entry in the end)
 	 */
 	n = file_rw(fd, origin_sh_off, shdr, sizeof(Elf64_Ehdr) * (ehdr->e_shnum - 1), FILE_WRITE);
-	ERR_ENO(n < 0, EIO, "Failed to override section header table.");
+	ERR_ENO(n < 0, errno, "Failed to override section header table");
 
 	/**
 	 * Update the ELF header about the info of section header table, and
 	 * override the ELF header in file.
 	 */
 	n = file_rw(fd, 0, ehdr, sizeof(Elf64_Ehdr), FILE_WRITE);
-	ERR_ENO(n < 0, EIO, "Failed to override ELF header.");
+	ERR_ENO(n < 0, errno, "Failed to override ELF header");
 
 	/**
 	 * Now the override of the file completed. Before starting to
@@ -741,16 +745,21 @@ static void elf_back_up(char *elf_name, char *dest_name)
 	strcpy(backup_name, elf_name);
 	strcat(backup_name, ".old");
 
+	/* Open the original file. */
+	int fd_origin = open(elf_name, O_RDONLY);
+	ERR_ENO(fd_origin < 0, errno, "Failed to open original file");
+
+	/* Get the status of original file. */
+	struct stat st;
+	ERR_ENO(fstat(fd_origin, &st), errno, "Failed to get status of original file");
+
+	/* Open the backup file. */
 	int fd_backup = 0;
 	if (!dest_name) {
-		fd_backup = open(backup_name, O_WRONLY | O_CREAT, 0777);
-	} else {
-		fd_backup = open(dest_name, O_WRONLY | O_CREAT, 0777);
+		dest_name = backup_name;
 	}
-	ERR_ENO(fd_backup < 0, EIO, "Failed to open back up file.");
-
-	int fd_origin = open(elf_name, O_RDONLY);
-	ERR_ENO(fd_origin < 0, EIO, "Failed to open origin file.");
+	fd_backup = open(dest_name, O_WRONLY | O_CREAT, st.st_mode);
+	ERR_ENO(fd_backup < 0, errno, "Failed to open back up file");
 
 	size_t len = 0;
 	while (len = read(fd_origin, backup_name, sizeof(backup_name))) {
@@ -827,15 +836,15 @@ int main(int argc, char **argv) {
 	 * in-memory ELF header.
 	 */
 	fd = open(elf_name, O_RDONLY);
-	ERR_ENO(fd < 0, EIO, "Failed to open file: %s", elf_name);
+	ERR_ENO(fd < 0, errno, "Failed to open file: %s", elf_name);
 	Elf64_Ehdr *ehdr = (Elf64_Ehdr *) malloc(sizeof(Elf64_Ehdr));
-	ERR_ENO(!ehdr, ENOMEM, "Failed to malloc for ELF header.");
+	ERR_ENO(!ehdr, ENOMEM, "Failed to malloc for ELF header");
 	n = file_rw(fd, 0, ehdr, sizeof(Elf64_Ehdr), FILE_READ);
-	ERR_ENO(n < 0, EIO, "Failed to read ELF header.");
+	ERR_ENO(n < 0, errno, "Failed to read ELF header");
 
 	ERR_ENO(memcmp(ehdr->e_ident, ELFMAG, SELFMAG), EBADMSG, "Invalid ELF file: %s", elf_name);
-	ERR_ENO(ehdr->e_ident[EI_VERSION] != EV_CURRENT, EBADMSG, "Not support ELF version.");
-	ERR_ENO(ehdr->e_ident[EI_CLASS] != ELFCLASS64, EBADMSG, "Not support byte long.");
+	ERR_ENO(ehdr->e_ident[EI_VERSION] != EV_CURRENT, EBADMSG, "Not support ELF version");
+	ERR_ENO(ehdr->e_ident[EI_CLASS] != ELFCLASS64, EBADMSG, "Not support byte long");
 	printf(" --- 64-bit ELF file, version 1 (CURRENT), ");
 
 	switch (ehdr->e_ident[EI_DATA]) {
@@ -854,16 +863,16 @@ int main(int argc, char **argv) {
 
 	/* Prepared for section header table. */
 	Elf64_Shdr *shdr = (Elf64_Shdr *) malloc(ehdr->e_shentsize * (ehdr->e_shnum));
-	ERR_ENO(!shdr, EIO, "Failed to malloc ELF section header table.");
+	ERR_ENO(!shdr, ENOMEM, "Failed to malloc ELF section header table");
 	n = file_rw(fd, ehdr->e_shoff, shdr, ehdr->e_shentsize * ehdr->e_shnum, FILE_READ);
-	ERR_ENO(n < 0, EIO, "Failed to read section header table.");
+	ERR_ENO(n < 0, errno, "Failed to read section header table");
 
 	/* Prepared for section header string table. */
 	Elf64_Shdr *shdr_strtab = shdr + ehdr->e_shstrndx;
 	char *strtab = (char *) malloc(shdr_strtab->sh_size);
-	ERR_ENO(!strtab, EIO, "Failed to malloc for string table.");
+	ERR_ENO(!strtab, ENOMEM, "Failed to malloc for string table");
 	n = file_rw(fd, shdr_strtab->sh_offset, strtab, shdr_strtab->sh_size, FILE_READ);
-	ERR_ENO(n < 0, EIO, "Failed to read string table.");
+	ERR_ENO(n < 0, errno, "Failed to read string table");
 
 	char *dynstrtab = NULL;
 	Elf64_Shdr *shdr_p = NULL;
@@ -881,10 +890,10 @@ int main(int argc, char **argv) {
 		 * 2. If ".dynstr" found, read in out from the file.
 		 */
 		if (!memcmp(scn_name, SCN_TEXT_SIG, sizeof(SCN_TEXT_SIG))) {
-			ERR_ENO(1, ENOEXEC, "File already been signed with section: [%s]", scn_name);
+			ERR_ENO(1, EEXIST, "File already been signed with section: [%s]", scn_name);
 		} else if (!memcmp(scn_name, SCN_DYNSTR, sizeof(SCN_DYNSTR))) {
 			dynstrtab = (char *) malloc(shdr_p->sh_size);
-			ERR_ENO(!dynstrtab, ENOMEM, "Failed to malloc for data of section %s.", scn_name);
+			ERR_ENO(!dynstrtab, ENOMEM, "Failed to malloc for data of section %s", scn_name);
 			file_rw(fd, shdr_p->sh_offset, dynstrtab, shdr_p->sh_size, FILE_READ);
 		}
 	}
@@ -902,7 +911,7 @@ int main(int argc, char **argv) {
 			if (!memcmp(scn_name, SCN_DYN, sizeof(SCN_DYN))) {
 				/* Dynamic array. */
 				Elf64_Dyn *scn_data = (Elf64_Dyn *) malloc(shdr_p->sh_size);
-				ERR_ENO(!scn_data, ENOMEM, "Failed to malloc for data of section %s.", scn_name);
+				ERR_ENO(!scn_data, ENOMEM, "Failed to malloc for data of section %s", scn_name);
 				file_rw(fd, shdr_p->sh_offset, scn_data, shdr_p->sh_size, FILE_READ);
 
 				for (Elf64_Dyn *dyn_ptr = scn_data;
@@ -938,7 +947,7 @@ int main(int argc, char **argv) {
 
 			/* Read the section data. */
 			char *scn_data = (char *) malloc(shdr_p->sh_size);
-			ERR_ENO(!scn_data, ENOMEM, "Failed to malloc for data of section %s.", scn_name);
+			ERR_ENO(!scn_data, ENOMEM, "Failed to malloc for data of section %s", scn_name);
 			file_rw(fd, shdr_p->sh_offset, scn_data, shdr_p->sh_size, FILE_READ);
 
 			/* Sign the section data to a temporary file. */
