@@ -1,6 +1,6 @@
 # linux-elf-binary-signer
 
-🐧 Adding digital signature into ELF binary files.
+✒️ Adding digital signature into ELF binary files.
 
 Created by : Mr Dk.
 
@@ -22,13 +22,13 @@ To build the program, install the dependencies firstly:
 $ sudo apt install libssl-dev openssl
 ```
 
-To check the result of signing, you also need following tools. But it is not necessary for the signing program.
+To check the signature result, you also need *binutils*. But it is not necessary for running the program.
 
 ```console
 $ sudo apt install binutils
 ```
 
-Then, build the tool through `make` command:
+Then, build the tool by `make`:
 
 ```console
 $ make
@@ -115,6 +115,8 @@ Contents of section .text_sig:
 
 ## Test
 
+### ELF Layout
+
 Directory `test/func/` contains several simple ELF files **with different layout**, and we are happy to gather more files with different ELF layout.
 
 `hello-gcc` is built from a very simple C program from GCC compiler:
@@ -142,6 +144,30 @@ func main() {
 ```
 
 You can see the different layouts through `readelf -S`. The `elf-sign` program should support both of the layouts. And we are looking for more different ELF layouts.
+
+### Dynamic Linking Example
+
+Directory `test/so/` contains a program `so-test` which need to be dynamically linked by `libtest.so`. To build and run the program and the shared objects:
+
+```console
+$ cd test/so
+
+$ make
+cc test.c -fPIC -shared -o libtest.so
+chmod 644 libtest.so
+cc so_test.c -L. -ltest -o so-test
+
+$ sudo cp libtest.so /lib/x86_64-linux-gnu
+
+$ sudo ldconfig
+
+$ strings /etc/ld.so.cache | grep libtest
+libtest.so
+/lib/x86_64-linux-gnu/libtest.so
+
+$ ./so-test 
+Dynamic linking successfully!
+```
 
 ## Generate Keys
 
