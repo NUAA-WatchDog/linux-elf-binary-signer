@@ -54,7 +54,4 @@ dkms.conf
 .vscode/
 elf-sign
 elf-sign.old
-parse
-vmlinux
-prev_test/
 hello-*
