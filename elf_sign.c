@@ -126,13 +126,13 @@ static void drain_openssl_errors(void)
 	while (ERR_get_error_line(&file, &line)) {}
 }
 
-#define ERR(cond, fmt, ...)				\
-	do {						\
-		bool __cond = (cond);			\
+#define ERR(cond, fmt, ...)					\
+	do {									\
+		bool __cond = (cond);				\
 		display_openssl_errors(__LINE__);	\
-		if (__cond) {				\
+		if (__cond) {						\
 			err(1, fmt, ## __VA_ARGS__);	\
-		}					\
+		}									\
 	} while(0)
 
 static const char *key_pass;
@@ -174,16 +174,14 @@ static EVP_PKEY *read_private_key(const char *private_key_name)
 		if (key_pass)
 			ERR(!ENGINE_ctrl_cmd_string(e, "PIN", key_pass, 0),
 			    "Set PKCS#11 PIN");
-		private_key = ENGINE_load_private_key(e, private_key_name,
-						      NULL, NULL);
+		private_key = ENGINE_load_private_key(e, private_key_name, NULL, NULL);
 		ERR(!private_key, "%s", private_key_name);
 	} else {
 		BIO *b;
 
 		b = BIO_new_file(private_key_name, "rb");
 		ERR(!b, "%s", private_key_name);
-		private_key = PEM_read_bio_PrivateKey(b, NULL, pem_pw_cb,
-						      NULL);
+		private_key = PEM_read_bio_PrivateKey(b, NULL, pem_pw_cb, NULL);
 		ERR(!private_key, "%s", private_key_name);
 		BIO_free(b);
 	}
@@ -707,12 +705,12 @@ retry:
 	 */
 	if (ehdr->e_shoff > shdr_strtab->sh_offset) {
 		file_modify(file_name, origin_sh_off + (ehdr->e_shnum - 1) * sizeof(Elf64_Shdr),
-				(char *) (shdr + ehdr->e_shnum - 1), sizeof(Elf64_Shdr), FILE_INSERT);
+					(char *) (shdr + ehdr->e_shnum - 1), sizeof(Elf64_Shdr), FILE_INSERT);
 		file_modify(file_name, name_insert_off, section_name, name_insert_len, FILE_INSERT);
 	} else {
 		file_modify(file_name, name_insert_off, section_name, name_insert_len, FILE_INSERT);
 		file_modify(file_name, origin_sh_off + (ehdr->e_shnum - 1) * sizeof(Elf64_Shdr),
-				(char *) (shdr + ehdr->e_shnum - 1), sizeof(Elf64_Shdr), FILE_INSERT);
+					(char *) (shdr + ehdr->e_shnum - 1), sizeof(Elf64_Shdr), FILE_INSERT);
 	}
 
 	/**
