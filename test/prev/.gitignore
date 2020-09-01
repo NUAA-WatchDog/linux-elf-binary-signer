@@ -1,2 +1,4 @@
 prev_test/
 prev-test
+*.old
+.*.sig

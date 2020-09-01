@@ -4,7 +4,7 @@
 #include <sys/time.h>
 #include <sys/fcntl.h>
 
-char EXEC_COUNT[] = "100";
+char EXEC_COUNT[] = "1000";
 char *TARGETS[] = {
     "cp", "df", "echo", "false", "grep", "kill", "less", "ls", "mkdir",
     "mount", "mv", "rm", "rmdir", "tar", "touch", "true", "umount", "uname"

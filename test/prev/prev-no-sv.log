@@ -1,0 +1,105 @@
+*** Executing signed version of cp for 1000 times.
+*** cp done.
+cp done in 3013373 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of df for 1000 times.
+*** df done.
+df done in 4031915 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of echo for 1000 times.
+*** echo done.
+echo done in 2015491 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of false for 1000 times.
+*** false done.
+false done in 1670998 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of grep for 1000 times.
+*** grep done.
+grep done in 2726951 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of kill for 1000 times.
+*** kill done.
+kill done in 4066986 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of less for 1000 times.
+*** less done.
+less done in 2637721 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of ls for 1000 times.
+*** ls done.
+ls done in 2765057 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of mkdir for 1000 times.
+*** mkdir done.
+mkdir done in 2797265 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of mount for 1000 times.
+*** mount done.
+mount done in 4353229 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of mv for 1000 times.
+*** mv done.
+mv done in 3062660 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of rm for 1000 times.
+*** rm done.
+rm done in 2186421 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of rmdir for 1000 times.
+*** rmdir done.
+rmdir done in 2164469 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of tar for 1000 times.
+*** tar done.
+tar done in 3348584 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of touch for 1000 times.
+*** touch done.
+touch done in 2165813 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of true for 1000 times.
+*** true done.
+true done in 1692813 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of umount for 1000 times.
+*** umount done.
+umount done in 3341070 μs.
+mkdir: cannot create directory ‘prev_test’: File exists
+cleaning
+
+*** Executing signed version of uname for 1000 times.
+*** uname done.
+uname done in 2013237 μs.

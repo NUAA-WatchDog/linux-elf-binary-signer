@@ -13,49 +13,25 @@ import sys
 
 #
 # Parse the result of vm execution into the structure.
-# The target line is like: "[   44.257384] @@@./mount@@@790614".
+# The target line is like: "uname done in 3526416 μs.".
 #
 # @file: the VM log file.
-# @mapper: <ELF bin name, [time1, time2, ...]>
+# @mapper: <ELF bin name, exec time>
 #
 def parse_result(file, mapper):
     for line in file:
         line = line.strip("\n")
-        tokens = line.split("@@@")
-        if len(tokens) == 3:
-            bin_name = tokens[1]
-            exec_time = int(tokens[2])
-            if bin_name.startswith("./") and not bin_name.endswith(".sh"):
-                if not bin_name in mapper:
-                    mapper[bin_name] = [];
-                mapper[bin_name].append(exec_time)
-
-#
-# Audit the cost of signature verification for one binary.
-#
-# @bin_name: the name of ELF binary.
-# @sv_result_arr: the execution time array of kernel with sv.
-# @no_sv_result_arr: the exection time array of kernel without sv.
-#
-def audit_sv_cost(bin_name, sv_result_arr, no_sv_result_arr):
-    if len(sv_result_arr) != len(no_sv_result_arr):
-        raise Exception("Execution time inconsistent.")
-    no_sv_time = 0
-    sv_time = 0
-    for exec_time in sv_result_arr:
-        sv_time += exec_time
-    for exec_time in no_sv_result_arr:
-        no_sv_time += exec_time
-    
-    print("-- ELF binary:", bin_name)
-    print("---- SV-time: ", sv_time)
-    print("---- NO-SV-time: ", no_sv_time)
-    print("---- COST: ", sv_time / no_sv_time)
+        tokens = line.split(" ")
+        if len(tokens) == 5:
+            bin_name = tokens[0]
+            exec_time = int(tokens[3])
+            if tokens[4].endswith("μs."):
+                mapper[bin_name] = exec_time
 
 #
 # Script entry.
 #
-# @since 2020/05/13
+# @since 2020/09/01
 #
 # @argv[1]: VM log without signature verification.
 # @argv[2]: VM log with signature verification.
@@ -66,7 +42,7 @@ if __name__ == "__main__":
 
     # @key: ELF binary name
     # @value: Array of execute time.
-    # e.g. <"./ls", [143, 144, 140, ...]>, <...>, ...
+    # e.g. <"./ls", 12321312(μs)>, <...>, ...
     no_sv_audit = {}
     sv_audit = {}
 
@@ -79,7 +55,10 @@ if __name__ == "__main__":
 
     # Calculate the cost.
     for bin in no_sv_audit.keys():
-        audit_sv_cost(bin, sv_audit[bin], no_sv_audit[bin])
+        print("-- ELF binary:", bin)
+        print("---- SV-time: ", sv_audit[bin])
+        print("---- NO-SV-time: ", no_sv_audit[bin])
+        print("---- COST: ", sv_audit[bin] / no_sv_audit[bin])
 
     no_sv_result.close()
     sv_result.close()
